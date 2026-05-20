@@ -1,0 +1,36 @@
+{
+  "name": "StreamPulse Webhook",
+  "displayName": "StreamPulse",
+  "description": "Send records to StreamPulse with HMAC-signed webhook",
+  "group": ["output"],
+  "version": 1,
+  "defaults": { "name": "StreamPulse" },
+  "inputs": ["main"],
+  "outputs": ["main"],
+  "credentials": [
+    { "name": "streampulseHmac", "required": true }
+  ],
+  "properties": [
+    {
+      "displayName": "StreamPulse URL",
+      "name": "url",
+      "type": "string",
+      "default": "http://localhost:8004",
+      "required": true
+    },
+    {
+      "displayName": "Source Name",
+      "name": "sourceName",
+      "type": "string",
+      "default": "n8n_default",
+      "description": "Used in /webhook/{source_name} routing"
+    },
+    {
+      "displayName": "With Vision",
+      "name": "withVision",
+      "type": "boolean",
+      "default": false,
+      "description": "Route to /webhook/{source}/with-vision for image enrichment via DocIntel"
+    }
+  ]
+}
