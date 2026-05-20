@@ -1,0 +1,39 @@
+{
+  "name": "Auction Aggregator → StreamPulse (with vision)",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
+      },
+      "name": "Every 15 min",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://example.com/auctions/feed.json",
+        "options": {}
+      },
+      "name": "Fetch Listings",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [80, 0]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8004/webhook/auction_aggregator/with-vision",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({records: $json.body}) }}",
+        "options": { "headers": [{ "name": "X-Signature-256", "value": "={{ $credentials.streampulseHmac.signature }}" }] }
+      },
+      "name": "StreamPulse",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [400, 0]
+    }
+  ],
+  "connections": {
+    "Every 15 min": { "main": [[{ "node": "Fetch Listings", "type": "main", "index": 0 }]] },
+    "Fetch Listings": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
+  }
+}

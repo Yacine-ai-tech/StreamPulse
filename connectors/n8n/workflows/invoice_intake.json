@@ -1,0 +1,37 @@
+{
+  "name": "Invoice Intake — Gmail → DocIntel → StreamPulse",
+  "nodes": [
+    {
+      "parameters": { "label": ["INVOICES"] },
+      "name": "Gmail New Invoice",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "position": [-200, 0]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8001/extract",
+        "method": "POST",
+        "options": {}
+      },
+      "name": "DocIntel Extract",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [80, 0]
+    },
+    {
+      "parameters": {
+        "url": "http://localhost:8004/ingest/json",
+        "method": "POST",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({records: [$json]}) }}"
+      },
+      "name": "StreamPulse Ingest",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [400, 0]
+    }
+  ],
+  "connections": {
+    "Gmail New Invoice": { "main": [[{ "node": "DocIntel Extract", "type": "main", "index": 0 }]] },
+    "DocIntel Extract": { "main": [[{ "node": "StreamPulse Ingest", "type": "main", "index": 0 }]] }
+  }
+}
