@@ -1,0 +1,47 @@
+# Lightweight dev compose for StreamPulse — runs in the streampulse Lightning Studio.
+# Uses SQLite by default (store.py → streampulse.db). No Postgres needed for dev.
+#
+# Usage inside the Studio:
+#   docker compose -f docker-compose.dev.yml up --build
+#
+# Reach it from the laptop: ssh -L 8004:localhost:8004 lightning-streampulse
+# Then: http://localhost:8004/health
+# WebSocket: ws://localhost:8004/live (also port-forwarded)
+
+services:
+  app:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: streampulse:dev
+    volumes:
+      - ./core:/app/core
+      - ./pipeline:/app/pipeline
+      - ./connectors:/app/connectors
+      - ./ingestion:/app/ingestion
+      - ./orchestration:/app/orchestration
+      - ./api.py:/app/api.py
+      - ./store.py:/app/store.py
+      - ./logs:/app/logs
+      - ./.env:/app/.env:ro
+      - streampulse_db:/app/data
+    ports:
+      - "8004:8004"
+    env_file: .env
+    environment:
+      PYTHONUNBUFFERED: "1"
+    command: >
+      uvicorn api:app
+      --host 0.0.0.0
+      --port 8004
+      --reload
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8004/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+
+volumes:
+  streampulse_db:
