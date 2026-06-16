@@ -35,3 +35,19 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
 3. **Prefect 3 flow** + **dlt** declarative source (modern, research-strong pipeline patterns).
 4. **Vision-composition webhook** → DocIntel `/classify-image` synergy (auction/inventory).
 5. **SSE** streaming endpoint + backpressure; **DuckDB/pgvector** advanced storage toggle.
+
+## Phase 6 build pass (2026-06-16, post-GPU)
+- **Assessment:** scaffold was substantially real — `api.py` (11 endpoints incl. HMAC webhooks,
+  `/webhook/{src}/with-vision` DocIntel synergy, SSE `/live/sse` + WS `/live`), `connectors`
+  (n8n, `webhook_receiver` HMAC-SHA256 + compare_digest), `ingestion/dlt_sources`,
+  `orchestration/prefect_flow`, `pipeline/classifier` (DomainClassifier + DataValidator + pipeline).
+- **BUG FOUND (real):** `pipeline/classifier.py` imported a non-existent `integrations` module →
+  the whole module failed to import → `api.py` silently used a **degraded fallback** classifier.
+  **Fix:** made the `integrations` import optional; added a module-level **hybrid `classify()`**
+  (keyword fast pass + opt-in LLM escalation via `STREAMPULSE_HYBRID_LLM=1`) — api now uses the
+  real classifier.
+- **Tests (Week 16):** `test_classifier.py` (keyword routing, hybrid dict, validator/dedup),
+  `test_webhook.py` (HMAC valid/tampered/missing), `test_api.py` (health/routes/real-classifier).
+  **Studio pytest: 18 passed.**
+- **Writing (Week 17):** `drafts/` (gitignored): `blog_post_6_realtime_pipeline.md`,
+  `upwork_proposal_templates.md` (3 niches).
