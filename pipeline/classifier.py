@@ -23,6 +23,8 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 import pandas as pd
 
+import os
+
 from core.config import settings
 from core.logger import get_logger
 from store import (
@@ -30,7 +32,14 @@ from store import (
     update_ingestion_log,
     store_kpi_metrics,
 )
-from integrations import IntegrationTypeEnum, get_dispatcher
+
+# Optional: the full-platform connector dispatcher (Gmail/Sheets). StreamPulse runs standalone
+# without it — the pipeline guards on `self.dispatcher` being None, so this stays importable.
+try:
+    from integrations import IntegrationTypeEnum, get_dispatcher  # type: ignore
+except ImportError:
+    IntegrationTypeEnum = None  # type: ignore
+    get_dispatcher = None  # type: ignore
 
 log = get_logger(__name__)
 
@@ -490,11 +499,40 @@ async def get_realtime_pipeline() -> RealtimePipeline:
     return _pipeline
 
 
+def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
+    """Hybrid domain classifier (Week 16.5): fast keyword pass, with an optional low-confidence
+    LLM escalation (opt-in via STREAMPULSE_HYBRID_LLM=1). Returns {domain, confidence, method}.
+
+    Embedding-based routing is a future tier; keyword + LLM cover the hybrid chain today.
+    """
+    domain, conf = DomainClassifier.classify(content or "")
+    result: Dict[str, Any] = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    if fast_only or conf >= 0.5 or os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
+        return result
+    try:  # low-confidence → escalate to an LLM (sync; only when explicitly enabled)
+        from litellm import completion
+        labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
+        resp = completion(
+            model=settings.LLM_DEFAULT,
+            messages=[{"role": "user", "content":
+                       f"Classify this into exactly one label from {labels}. "
+                       f"Reply with ONLY the label.\n\n{content[:1200]}"}],
+            temperature=0.0,
+        )
+        label = (resp.choices[0].message.content or "").strip()
+        if label in labels:
+            return {"domain": label, "confidence": 0.7, "method": "llm"}
+    except Exception as e:
+        log.warning("LLM classify escalation failed: %s", e)
+    return result
+
+
 __all__ = [
     "RealtimePipeline",
     "DataRecord",
     "DomainClassifier",
     "DataValidator",
+    "classify",
     "get_realtime_pipeline",
 ]
 
