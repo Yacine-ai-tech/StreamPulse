@@ -65,3 +65,10 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
   + `eval/CLASSIFIER_BENCHMARK.md`: **keyword tier 8% acc** vs **hybrid+LLM 100%** — honest,
   measured demonstration of the hybrid classifier's value (first set was rewritten because it was
   keyword-self-aligned → trivially 100%). Caveats documented (small curated set; real streams mixed).
+
+## FINAL scoreboard + Docker validation (2026-06-17)
+- **Docker**: /health **200** on :8004. Hybrid classifier: keyword **8%** vs LLM-tier **100%** on keyword-poor text (honest — no worldwide benchmark for custom domains). HMAC webhook tested. Tests 18. Fixed real broken-classifier-import bug.
+- Deployment validated via **Docker** (docker-compose.dev.yml), the isolated per-repo design —
+  NOT the shared conda env. All 6 repos: 6/6 containers serve /health.
+- **User-gated (cannot be done by the agent):** Railway/Fly deploy, PyPI upload (wheels built),
+  Loom recording, sending Upwork proposals, publishing blog/preprint drafts.
