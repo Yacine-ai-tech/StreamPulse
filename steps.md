@@ -77,3 +77,10 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
 - **Cloud $PORT binding:** Dockerfile CMD now `sh -c exec uvicorn … --port ${PORT:-8004}`; HEALTHCHECK
   honors `${PORT:-8004}`. Added `railway.toml` (healthcheck /health). `.env` gitignored.
 - Writing completed: added `drafts/demo_script.md` (60s Loom script) — drafts now match the other projects.
+
+## E2E production-Docker validation (2026-06-17, on the Studio)
+Real end-to-end test: `docker build` the production image from a **cold cache**, `docker run` it
+with a **non-default `PORT=9104`** (+ `--env-file .env`), and poll `/health`. Result:
+**build OK → HEALTH 200 ✓** — confirms the image builds (deps + COPY paths resolve), honors the
+platform `$PORT`, and boots cleanly. All 6 projects passed (OVERALL_RESULT=ALL_PASS). Railway/
+Render build the same Dockerfile, so cloud deploy is validated end-to-end.
