@@ -32,6 +32,12 @@ app = FastAPI(title="StreamPulse", version="0.1.0",
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
+try:  # browser demo UI (served by the backend, no separate deploy)
+    from fastapi.staticfiles import StaticFiles
+    app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
+except RuntimeError:
+    log.warning("demo/ directory not found — /demo will not be served")
+
 try:
     init_db()
 except Exception as e:
