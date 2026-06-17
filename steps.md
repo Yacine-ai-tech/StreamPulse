@@ -84,3 +84,8 @@ with a **non-default `PORT=9104`** (+ `--env-file .env`), and poll `/health`. Re
 **build OK → HEALTH 200 ✓** — confirms the image builds (deps + COPY paths resolve), honors the
 platform `$PORT`, and boots cleanly. All 6 projects passed (OVERALL_RESULT=ALL_PASS). Railway/
 Render build the same Dockerfile, so cloud deploy is validated end-to-end.
+
+## Demo UI (2026-06-17)
+- Added a backend-served demo at **/demo** (`demo/index.html`, StaticFiles) — ingest events,
+  watch hybrid keyword/LLM domain classification stream in via `/pipeline/history` + SSE `/live/sse`.
+  No separate deploy (was previously API-only).
