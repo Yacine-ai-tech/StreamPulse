@@ -59,3 +59,9 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
 ## Remediation — LIVE behavior validation (2026-06-17)
 - Added `tests/test_live_classify.py` (real LLM, skip-if-no-key): **hybrid classifier LLM tier LIVE**: keyword-poor finance text → domain=Finance, method=llm (real LLM escalation).
 - Addresses the "tests prove imports not behavior" gap with a real, measured run.
+
+## Remediation — classifier benchmark (2026-06-17)
+- `eval/run_classifier_benchmark.py` + `eval/domain_labeled.jsonl` (24 keyword-poor paraphrases)
+  + `eval/CLASSIFIER_BENCHMARK.md`: **keyword tier 8% acc** vs **hybrid+LLM 100%** — honest,
+  measured demonstration of the hybrid classifier's value (first set was rewritten because it was
+  keyword-self-aligned → trivially 100%). Caveats documented (small curated set; real streams mixed).
