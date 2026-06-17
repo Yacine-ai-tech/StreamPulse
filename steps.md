@@ -72,3 +72,8 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
   NOT the shared conda env. All 6 repos: 6/6 containers serve /health.
 - **User-gated (cannot be done by the agent):** Railway/Fly deploy, PyPI upload (wheels built),
   Loom recording, sending Upwork proposals, publishing blog/preprint drafts.
+
+## Production-readiness — deploy-today pass (2026-06-17)
+- **Cloud $PORT binding:** Dockerfile CMD now `sh -c exec uvicorn … --port ${PORT:-8004}`; HEALTHCHECK
+  honors `${PORT:-8004}`. Added `railway.toml` (healthcheck /health). `.env` gitignored.
+- Writing completed: added `drafts/demo_script.md` (60s Loom script) — drafts now match the other projects.
