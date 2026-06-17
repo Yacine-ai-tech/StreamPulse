@@ -1,5 +1,7 @@
 # StreamPulse
 
+[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
 **Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
 
 ## What It Does
