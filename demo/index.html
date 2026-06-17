@@ -1,0 +1,86 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>StreamPulse — demo</title>
+<style>
+  :root { --bg:#0d1117; --card:#161b22; --bd:#30363d; --tx:#e6edf3; --mut:#8b949e; --ac:#8b5cf6; --ok:#22c55e; }
+  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--tx);
+    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
+  .wrap { max-width:860px; margin:0 auto; padding:32px 20px 64px; }
+  h1 { font-size:1.6rem; margin:0 0 4px; } .sub { color:var(--mut); margin:0 0 24px; }
+  .card { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:20px; margin-bottom:18px; }
+  label { display:block; font-size:.8rem; color:var(--mut); margin:0 0 6px; text-transform:uppercase; letter-spacing:.04em; }
+  textarea { width:100%; min-height:90px; background:#0d1117; color:var(--tx); border:1px solid var(--bd);
+    border-radius:8px; padding:10px; font:inherit; resize:vertical; }
+  button { background:var(--ac); color:#fff; border:0; border-radius:8px; padding:11px 18px;
+    font:600 15px/1 inherit; cursor:pointer; margin-top:14px; } button:disabled { opacity:.5; cursor:wait; }
+  .pill { display:inline-block; font-size:.72rem; padding:2px 8px; border-radius:999px; background:#1f2937; color:var(--mut); margin-left:8px; }
+  .pill.ok { background:#0f2e1b; color:var(--ok); }
+  .row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--bd); border-radius:8px; margin-top:8px; background:#0d1117; }
+  .dom { font-weight:700; color:var(--ac); min-width:120px; }
+  .conf { font-size:.78rem; color:var(--mut); } .txt { flex:1; color:var(--tx); font-size:.9rem; }
+  .feed { max-height:320px; overflow:auto; } a { color:var(--ac); } code { color:var(--mut); }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>StreamPulse <span id="health" class="pill">checking…</span></h1>
+  <p class="sub">Real-time ingest → dedup/enrich → <b>hybrid domain classification</b> (keyword + opt-in LLM). One event per line.</p>
+
+  <div class="card">
+    <label>Events to ingest (one per line)</label>
+    <textarea id="ev">Q3 marketing spend exceeded budget by 12%
+New hire onboarding completed for 5 engineers
+Production API latency spiked to 800ms during deploy
+Container shipment delayed at the port of Rotterdam</textarea>
+    <button id="go" onclick="ingest()">Ingest &amp; classify</button>
+  </div>
+
+  <div class="card">
+    <label>Live feed <span class="pill" id="sse">SSE</span></label>
+    <div class="feed" id="feed"><span class="sub">Ingest events to see classified results stream in…</span></div>
+  </div>
+  <p class="sub">API: <code>POST /ingest/json</code> · <code>GET /pipeline/history</code> · SSE <code>/live/sse</code> · <a href="/docs">docs</a></p>
+</div>
+<script>
+async function health(){
+  try { const j = await (await fetch('/health')).json();
+    const el = document.getElementById('health'); el.textContent = j.status||'ok'; el.className='pill ok';
+  } catch(e){ document.getElementById('health').textContent='offline'; }
+}
+function render(records){
+  const feed = document.getElementById('feed');
+  if (!records || !records.length) return;
+  feed.innerHTML = records.slice().reverse().map(r => {
+    const dom = r.domain ?? r.classification ?? '—';
+    const conf = (r.confidence!=null) ? (Math.round(r.confidence*100)+'%') : '';
+    const txt = r.metric ?? r.text ?? JSON.stringify(r).slice(0,80);
+    const m = r.method ? `<span class="conf">(${r.method})</span>` : '';
+    return `<div class="row"><span class="dom">${dom}</span><span class="conf">${conf}</span> ${m}<span class="txt">${txt}</span></div>`;
+  }).join('');
+}
+async function ingest(){
+  const btn = document.getElementById('go'); btn.disabled=true; btn.textContent='Ingesting…';
+  const records = document.getElementById('ev').value.split('\n').map(s=>s.trim()).filter(Boolean).map((m,i)=>({id:String(Date.now()+i), metric:m}));
+  try {
+    await fetch('/ingest/json', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({records, source:'demo'}) });
+    setTimeout(refresh, 400);
+  } catch(e){ document.getElementById('feed').textContent = 'Error: '+e; }
+  btn.disabled=false; btn.textContent='Ingest & classify';
+}
+async function refresh(){
+  try { const j = await (await fetch('/pipeline/history?limit=20')).json();
+    render(j.records || j.history || j); } catch(e){}
+}
+// live SSE
+try {
+  const es = new EventSource('/live/sse');
+  es.onmessage = e => { try { const d = JSON.parse(e.data); render(d.records || d.history || d); document.getElementById('sse').className='pill ok'; } catch(_){} };
+  es.onerror = () => { document.getElementById('sse').textContent='SSE off'; };
+} catch(e){}
+health(); refresh();
+</script>
+</body>
+</html>
