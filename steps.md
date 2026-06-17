@@ -55,3 +55,7 @@ workflows, Prefect 3 orchestration, dlt sources, SSE) is the next major work per
 ## Comprehensive QA pass (2026-06-16)
 - **18 tests pass**. §6.10 verified: n8n, Prefect, hybrid classifier, dlt, vision-composition (DocIntel synergy), SSE.
 - All 6 projects + both packages green; 28/28 STRATEGY §.10 feature claims code-verified.
+
+## Remediation — LIVE behavior validation (2026-06-17)
+- Added `tests/test_live_classify.py` (real LLM, skip-if-no-key): **hybrid classifier LLM tier LIVE**: keyword-poor finance text → domain=Finance, method=llm (real LLM escalation).
+- Addresses the "tests prove imports not behavior" gap with a real, measured run.
