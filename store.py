@@ -1,7 +1,7 @@
 """
 StreamPulse slim store — KPI metrics + ingestion logs only.
 
-NOTE: Extracted from OmniIntelOS pg_store.py with only the functions
+NOTE: A focused Postgres store (the subset of functions
 this project needs. Chat, OCR, voice, OAuth, user functions are removed.
 """
 from __future__ import annotations
