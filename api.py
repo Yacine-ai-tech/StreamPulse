@@ -148,23 +148,30 @@ async def webhook_with_vision(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json")
 
-    records = WebhookReceiver.parse_payload(payload, source_name)
-    enriched: List[Dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=30) as client:
-        for r in records:
-            img_url = (r.get("raw") or {}).get("image_url") if isinstance(r.get("raw"), dict) else None
-            if img_url:
-                try:
-                    img_bytes = (await client.get(img_url)).content
-                    files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
-                    data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
-                    resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data)
-                    r["image_category"] = resp.json().get("category")
-                    r["image_confidence"] = resp.json().get("confidence")
-                except Exception as e:
-                    log.warning("vision compose failed: %s", e)
-            enriched.append(dict(r))
-    return await ingest_json(IngestJsonRequest(records=enriched, source=source_name))
+    try:
+        records = WebhookReceiver.parse_payload(payload, source_name)
+        enriched: List[Dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=30) as client:
+            for r in records:
+                raw = r.get("raw")
+                # image_url lives at the record top level (parse_payload stores the
+                # original item under "raw"); tolerate a missing/odd shape gracefully.
+                img_url = raw.get("image_url") if isinstance(raw, dict) else None
+                if img_url:
+                    try:
+                        img_bytes = (await client.get(img_url)).content
+                        files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
+                        data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
+                        resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data)
+                        r["image_category"] = resp.json().get("category")
+                        r["image_confidence"] = resp.json().get("confidence")
+                    except Exception as e:
+                        log.warning("vision compose failed: %s", e)
+                enriched.append(dict(r))
+        return await ingest_json(IngestJsonRequest(records=enriched, source=source_name))
+    except Exception as e:
+        log.warning("with-vision processing failed: %s", e)
+        raise HTTPException(status_code=400, detail="invalid_payload")
 
 
 @app.get("/pipeline/status")
