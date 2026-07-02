@@ -10,7 +10,7 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from core.config import settings
@@ -37,6 +37,14 @@ try:  # browser demo UI (served by the backend, no separate deploy)
     app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
 except RuntimeError:
     log.warning("demo/ directory not found — /demo will not be served")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard():
+    """Serve the accessible StreamPulse dashboard at the root."""
+    import os
+    path = os.path.join(os.path.dirname(__file__), "demo", "index.html")
+    return FileResponse(path) if os.path.exists(path) else {"service": "streampulse", "docs": "/docs"}
 
 try:
     init_db()
