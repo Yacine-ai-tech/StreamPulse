@@ -1,86 +1,122 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
 <head>
 <meta charset="utf-8" />
 <meta name="viewport" content="width=device-width, initial-scale=1" />
-<title>StreamPulse — demo</title>
+<meta name="theme-color" content="#070b16" />
+<title>StreamPulse — Real-time Data Pipeline</title>
+<meta name="description" content="StreamPulse — real-time multi-source data ingestion, enrichment and live streaming (SSE/WebSocket)." />
 <style>
-  :root { --bg:#0d1117; --card:#161b22; --bd:#30363d; --tx:#e6edf3; --mut:#8b949e; --ac:#8b5cf6; --ok:#22c55e; }
-  * { box-sizing:border-box; } body { margin:0; background:var(--bg); color:var(--tx);
-    font:15px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif; }
-  .wrap { max-width:860px; margin:0 auto; padding:32px 20px 64px; }
-  h1 { font-size:1.6rem; margin:0 0 4px; } .sub { color:var(--mut); margin:0 0 24px; }
-  .card { background:var(--card); border:1px solid var(--bd); border-radius:12px; padding:20px; margin-bottom:18px; }
-  label { display:block; font-size:.8rem; color:var(--mut); margin:0 0 6px; text-transform:uppercase; letter-spacing:.04em; }
-  textarea { width:100%; min-height:90px; background:#0d1117; color:var(--tx); border:1px solid var(--bd);
-    border-radius:8px; padding:10px; font:inherit; resize:vertical; }
-  button { background:var(--ac); color:#fff; border:0; border-radius:8px; padding:11px 18px;
-    font:600 15px/1 inherit; cursor:pointer; margin-top:14px; } button:disabled { opacity:.5; cursor:wait; }
-  .pill { display:inline-block; font-size:.72rem; padding:2px 8px; border-radius:999px; background:#1f2937; color:var(--mut); margin-left:8px; }
-  .pill.ok { background:#0f2e1b; color:var(--ok); }
-  .row { display:flex; align-items:center; gap:8px; padding:8px 10px; border:1px solid var(--bd); border-radius:8px; margin-top:8px; background:#0d1117; }
-  .dom { font-weight:700; color:var(--ac); min-width:120px; }
-  .conf { font-size:.78rem; color:var(--mut); } .txt { flex:1; color:var(--tx); font-size:.9rem; }
-  .feed { max-height:320px; overflow:auto; } a { color:var(--ac); } code { color:var(--mut); }
+  :root{--bg:#070b16;--bg2:#0a1020;--surface:#0f1628;--border:rgba(125,155,215,.16);--border2:rgba(125,155,215,.28);
+    --text:#eaf1ff;--text2:#9fb0d0;--text3:#5f6f8e;--primary:#38bdf8;--cyan:#22d3ee;--ok:#2dd4bf;--bad:#fb7185;--warn:#fbbf24;
+    --grad:linear-gradient(120deg,#4f46e5 0%,#2563eb 45%,#22d3ee 100%);--gradline:linear-gradient(120deg,rgba(99,102,241,.5),rgba(34,211,238,.5));
+    --mono:'JetBrains Mono',ui-monospace,Menlo,monospace;--r:14px;--sh:0 12px 32px rgba(2,6,18,.55);--ig:inset 0 1px 0 rgba(150,190,255,.06),inset 0 0 26px rgba(34,211,238,.035)}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{font-family:Inter,system-ui,-apple-system,'Segoe UI',sans-serif;color:var(--text);line-height:1.55;min-height:100vh;
+    background:radial-gradient(1100px 620px at 6% -12%,rgba(79,70,229,.16),transparent 60%),radial-gradient(960px 600px at 102% 2%,rgba(34,211,238,.11),transparent 55%),var(--bg);-webkit-font-smoothing:antialiased}
+  a{color:var(--primary);text-decoration:none}
+  .wrap{max-width:1120px;margin:0 auto;padding:34px 22px 60px}
+  header{display:flex;align-items:center;gap:14px;flex-wrap:wrap}
+  .mark{filter:drop-shadow(0 4px 14px rgba(34,211,238,.45))}
+  .brand{font-family:'Space Grotesk',Inter,sans-serif;font-weight:700;font-size:1.7rem;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.02em}
+  .sub{color:var(--text3);font-size:.72rem;text-transform:uppercase;letter-spacing:.14em}
+  .spacer{flex:1}
+  .badge{display:inline-flex;align-items:center;gap:7px;padding:5px 12px;border:1px solid var(--border2);border-radius:999px;font-size:.78rem;color:var(--text2)}
+  .dot{width:8px;height:8px;border-radius:50%;background:var(--text3)}.dot.ok{background:var(--ok);box-shadow:0 0 0 3px rgba(45,212,191,.18)}.dot.bad{background:var(--bad)}
+  .dot.live{background:var(--cyan);animation:pulse 1.4s infinite}@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(34,211,238,.5)}50%{box-shadow:0 0 0 5px rgba(34,211,238,0)}}
+  .lead{color:var(--text2);font-size:1.02rem;margin:14px 0 22px;max-width:680px}
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(180px,1fr));gap:14px;margin-bottom:18px}
+  .kpi{position:relative;overflow:hidden;padding:16px 18px;border-radius:var(--r);background:linear-gradient(180deg,var(--surface),#0d1424) padding-box,var(--border2) border-box;border:1px solid transparent;box-shadow:var(--sh),var(--ig)}
+  .kpi::before{content:'';position:absolute;top:0;left:0;right:0;height:2px;background:var(--grad);opacity:.6}
+  .kpi .k{font-size:.68rem;text-transform:uppercase;letter-spacing:.08em;color:var(--text3)}
+  .kpi .v{font-family:var(--mono);font-size:1.7rem;font-weight:700;margin-top:4px}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:18px}@media(max-width:760px){.grid{grid-template-columns:1fr}}
+  .card{position:relative;background:linear-gradient(180deg,var(--surface),#0d1424) padding-box,var(--gradline) border-box;border:1px solid transparent;border-radius:var(--r);padding:20px 22px;box-shadow:var(--sh),var(--ig)}
+  .card::after{content:'';position:absolute;top:-1px;right:-1px;width:22px;height:22px;pointer-events:none;border-top:2px solid var(--cyan);border-right:2px solid var(--cyan);border-top-right-radius:var(--r);opacity:.32;-webkit-mask:linear-gradient(225deg,#000 0 42%,transparent 42%);mask:linear-gradient(225deg,#000 0 42%,transparent 42%)}
+  .card h2{font-family:'Space Grotesk',Inter,sans-serif;font-size:1.02rem;display:flex;align-items:center;gap:9px;margin-bottom:12px}
+  .card h2 .i{color:var(--cyan)}.card h2 .spacer{flex:1}
+  label{display:block;font-size:.78rem;font-weight:600;color:var(--text2);margin:8px 0 6px}
+  textarea,input{width:100%;padding:10px 13px;background:var(--bg2);border:1px solid var(--border2);border-radius:10px;color:var(--text);font-size:.86rem;font-family:var(--mono)}
+  textarea{resize:vertical;min-height:96px}textarea:focus,input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 3px rgba(56,189,248,.16)}
+  button{display:inline-flex;align-items:center;justify-content:center;gap:8px;margin-top:14px;padding:10px 18px;border:0;border-radius:10px;background:var(--grad);color:#04121f;font-weight:700;font-size:.88rem;cursor:pointer;box-shadow:0 4px 14px rgba(45,140,235,.35);transition:.15s}
+  button:hover{filter:brightness(1.08);transform:translateY(-1px)}button:disabled{opacity:.55}
+  .feed{font-family:var(--mono);font-size:.78rem;max-height:340px;overflow:auto;display:flex;flex-direction:column;gap:6px}
+  .ev{padding:8px 11px;background:var(--bg2);border:1px solid var(--border);border-left:2px solid var(--cyan);border-radius:8px;color:var(--text2);animation:fade .3s ease}
+  @keyframes fade{from{opacity:0;transform:translateY(-4px)}to{opacity:1}}
+  .ev .t{color:var(--text3);font-size:.68rem}
+  .muted{color:var(--text3)}
+  footer{margin-top:40px;color:var(--text3);font-size:.8rem;text-align:center}
+  .spin{width:14px;height:14px;border:2px solid rgba(4,18,31,.4);border-top-color:#04121f;border-radius:50%;display:inline-block;animation:s .7s linear infinite}@keyframes s{to{transform:rotate(360deg)}}
 </style>
 </head>
 <body>
 <div class="wrap">
-  <h1>StreamPulse <span id="health" class="pill">checking…</span></h1>
-  <p class="sub">Real-time ingest → dedup/enrich → <b>hybrid domain classification</b> (keyword + opt-in LLM). One event per line.</p>
+  <header>
+    <svg class="mark" width="40" height="40" viewBox="0 0 40 40" fill="none" aria-hidden="true">
+      <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#6366f1"/><stop offset=".5" stop-color="#2563eb"/><stop offset="1" stop-color="#22d3ee"/></linearGradient></defs>
+      <path d="M20 3.4 33.3 11V26L20 33.6 6.7 26V11Z" stroke="url(#g)" stroke-width="2.2" stroke-linejoin="round"/>
+      <path d="M20 3.4V18M20 18 6.7 11M20 18l13.3-7" stroke="url(#g)" stroke-width="1.3" opacity=".45"/>
+      <path d="M20 27V13.4M14.4 19 20 13.4 25.6 19" stroke="url(#g)" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>
+    <div><div class="brand">StreamPulse</div><div class="sub">Real-time Data Pipeline</div></div>
+    <div class="spacer"></div>
+    <span class="badge"><span class="dot" id="hdot"></span><span id="hstat">checking…</span></span>
+  </header>
+  <p class="lead">Ingest data from any source (JSON, CSV, email, webhooks), enrich it, and stream it live
+    to connected clients over SSE / WebSocket. Try it: ingest a batch and watch it appear in the live feed.</p>
 
-  <div class="card">
-    <label>Events to ingest (one per line)</label>
-    <textarea id="ev">Q3 marketing spend exceeded budget by 12%
-New hire onboarding completed for 5 engineers
-Production API latency spiked to 800ms during deploy
-Container shipment delayed at the port of Rotterdam</textarea>
-    <button id="go" onclick="ingest()">Ingest &amp; classify</button>
+  <div class="kpis">
+    <div class="kpi"><div class="k">Pipeline</div><div class="v" id="mStatus">—</div></div>
+    <div class="kpi"><div class="k">Connected clients</div><div class="v" id="mClients">—</div></div>
+    <div class="kpi"><div class="k">Events (session)</div><div class="v" id="mEvents">0</div></div>
   </div>
 
-  <div class="card">
-    <label>Live feed <span class="pill" id="sse">SSE</span></label>
-    <div class="feed" id="feed"><span class="sub">Ingest events to see classified results stream in…</span></div>
+  <div class="grid">
+    <section class="card">
+      <h2><span class="i">⇪</span> Ingest data</h2>
+      <label for="iSource">Source</label><input id="iSource" value="demo_dashboard" />
+      <label for="iRecords">Records (JSON array)</label>
+      <textarea id="iRecords">[{"metric":"signups","value":42,"channel":"web"},{"metric":"revenue","value":1290,"channel":"api"}]</textarea>
+      <button id="iBtn" onclick="doIngest()">Ingest batch</button>
+      <div class="muted" id="iOut" style="margin-top:10px;font-size:.82rem"></div>
+    </section>
+
+    <section class="card">
+      <h2><span class="i">◉</span> Live feed <span class="spacer"></span><span class="badge"><span class="dot" id="sseDot"></span><span id="sseStat" style="font-size:.72rem">connecting…</span></span></h2>
+      <div class="feed" id="feed"><span class="muted">Waiting for events… ingest a batch to see them stream in.</span></div>
+    </section>
   </div>
-  <p class="sub">API: <code>POST /ingest/json</code> · <code>GET /pipeline/history</code> · SSE <code>/live/sse</code> · <a href="/docs">docs</a></p>
+
+  <footer>StreamPulse · <a href="/docs">API docs</a> · <a href="/health">health</a> · part of the OmniIntel portfolio</footer>
 </div>
 <script>
-async function health(){
-  try { const j = await (await fetch('/health')).json();
-    const el = document.getElementById('health'); el.textContent = j.status||'ok'; el.className='pill ok';
-  } catch(e){ document.getElementById('health').textContent='offline'; }
-}
-function render(records){
-  const feed = document.getElementById('feed');
-  if (!records || !records.length) return;
-  feed.innerHTML = records.slice().reverse().map(r => {
-    const dom = r.domain ?? r.classification ?? '—';
-    const conf = (r.confidence!=null) ? (Math.round(r.confidence*100)+'%') : '';
-    const txt = r.metric ?? r.text ?? JSON.stringify(r).slice(0,80);
-    const m = r.method ? `<span class="conf">(${r.method})</span>` : '';
-    return `<div class="row"><span class="dom">${dom}</span><span class="conf">${conf}</span> ${m}<span class="txt">${txt}</span></div>`;
-  }).join('');
-}
-async function ingest(){
-  const btn = document.getElementById('go'); btn.disabled=true; btn.textContent='Ingesting…';
-  const records = document.getElementById('ev').value.split('\n').map(s=>s.trim()).filter(Boolean).map((m,i)=>({id:String(Date.now()+i), metric:m}));
-  try {
-    await fetch('/ingest/json', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({records, source:'demo'}) });
-    setTimeout(refresh, 400);
-  } catch(e){ document.getElementById('feed').textContent = 'Error: '+e; }
-  btn.disabled=false; btn.textContent='Ingest & classify';
-}
-async function refresh(){
-  try { const j = await (await fetch('/pipeline/history?limit=20')).json();
-    render(j.records || j.history || j); } catch(e){}
-}
-// live SSE
-try {
-  const es = new EventSource('/live/sse');
-  es.onmessage = e => { try { const d = JSON.parse(e.data); render(d.records || d.history || d); document.getElementById('sse').className='pill ok'; } catch(_){} };
-  es.onerror = () => { document.getElementById('sse').textContent='SSE off'; };
-} catch(e){}
-health(); refresh();
+const $=id=>document.getElementById(id);let events=0;
+document.querySelectorAll('button').forEach(b=>b.dataset.label=b.textContent);
+function busy(b,on,l){b.disabled=on;b.innerHTML=on?'<span class="spin"></span> '+(l||'Working…'):b.dataset.label}
+async function status(){try{const r=await fetch('/pipeline/status');const j=await r.json();
+  $('hdot').className='dot '+(r.ok?'ok':'bad');$('hstat').textContent=r.ok?'online':'offline';
+  $('mStatus').textContent=j.status||'—';$('mClients').textContent=j.connected_clients??'—';}
+  catch{$('hdot').className='dot bad';$('hstat').textContent='offline'}}
+status();setInterval(status,5000);
+
+function addEvent(obj){events++;$('mEvents').textContent=events;
+  const f=$('feed');if(f.querySelector('.muted'))f.innerHTML='';
+  const d=document.createElement('div');d.className='ev';
+  d.innerHTML='<div class="t">'+new Date().toLocaleTimeString()+'</div>'+JSON.stringify(obj);
+  f.prepend(d);while(f.children.length>40)f.removeChild(f.lastChild);}
+
+try{const es=new EventSource('/live/sse');
+  es.onopen=()=>{$('sseDot').className='dot live';$('sseStat').textContent='live';};
+  es.onmessage=e=>{try{addEvent(JSON.parse(e.data))}catch{addEvent(e.data)}};
+  es.onerror=()=>{$('sseDot').className='dot bad';$('sseStat').textContent='reconnecting…';};
+}catch(e){$('sseStat').textContent='SSE unavailable'}
+
+async function doIngest(){const b=$('iBtn');busy(b,true,'Ingesting…');$('iOut').textContent='';
+  let records;try{records=JSON.parse($('iRecords').value)}catch{ $('iOut').textContent='Records must be a valid JSON array.';busy(b,false);return}
+  try{const r=await fetch('/ingest/json',{method:'POST',headers:{'Content-Type':'application/json'},
+    body:JSON.stringify({source:$('iSource').value,records})});const j=await r.json();
+    $('iOut').textContent=r.ok?('✓ ingested '+(j.records_inserted??j.records_in)+' record(s) — watch the live feed'):('Error '+r.status+': '+JSON.stringify(j));}
+  catch(e){$('iOut').textContent='Request failed: '+e}finally{busy(b,false)}}
 </script>
 </body>
 </html>
