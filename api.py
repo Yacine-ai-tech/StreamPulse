@@ -43,7 +43,11 @@ except RuntimeError:
 async def dashboard():
     """Serve the accessible StreamPulse dashboard at the root."""
     import os
-    path = os.path.join(os.path.dirname(__file__), "demo", "index.html")
+    root = os.path.dirname(__file__)
+    spa = os.path.join(root, "frontend", "dist", "index.html")
+    if os.path.exists(spa):
+        return FileResponse(spa)
+    path = os.path.join(root, "demo", "index.html")
     return FileResponse(path) if os.path.exists(path) else {"service": "streampulse", "docs": "/docs"}
 
 try:
@@ -214,3 +218,19 @@ async def live_sse(request: Request) -> StreamingResponse:
             yield f"data: {json.dumps(recent)}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ─── SPA serving (registered last so every API route above wins) ─────────────
+import os as _os
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+
+_DIST = _os.path.join(_os.path.dirname(__file__), "frontend", "dist")
+if _os.path.isdir(_os.path.join(_DIST, "assets")):
+    app.mount("/assets", _StaticFiles(directory=_os.path.join(_DIST, "assets")), name="spa_assets")
+
+    @app.get("/{spa_path:path}", include_in_schema=False)
+    async def spa_fallback(spa_path: str):
+        candidate = _os.path.join(_DIST, spa_path)
+        if spa_path and _os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(_os.path.join(_DIST, "index.html"))
