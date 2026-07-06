@@ -37,7 +37,7 @@ export default function Classifier() {
         <StatTile label="Domains" value="6" sub="Finance · Growth · Operations · People · ESG · IT_Ops" />
       </div>
 
-      <Card title="Benchmark honesty" className="mt-5" actions={<Chip>eval/CLASSIFIER_BENCHMARK.md</Chip>}>
+      <Card title="Methodology and caveats" className="mt-5" actions={<Chip>eval/CLASSIFIER_BENCHMARK.md</Chip>}>
         <p className="text-[13px] leading-6 text-dim">
           The benchmark set is deliberately hard: 24 texts paraphrased to avoid the literal domain
           keywords, so it measures the value of the LLM tier rather than a self-aligned keyword list.
