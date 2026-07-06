@@ -1,0 +1,27 @@
+# Render Blueprint — disaster-recovery / one-click redeploy. Builds from ./Dockerfile (honors $PORT),
+# health-checks /health. No secrets here: every key is `sync: false` (set values in the dashboard).
+# Runs on Render free. STREAMPULSE_HYBRID_LLM=1 + an LLM key enables Claude zero-shot escalation
+# for the classifier (keyword/embedding fast-paths work without it).
+services:
+  - type: web
+    name: streampulse
+    runtime: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
+    plan: free
+    autoDeploy: false
+    envVars:
+      - key: GROQ_API_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: WEBHOOK_SECRET        # HMAC-SHA256 verification for POST /webhook/{source}
+        sync: false
+      - key: STREAMPULSE_HYBRID_LLM
+        value: "1"
+      - key: DOCINTEL_URL          # for /webhook/{src}/with-vision composition
+        sync: false
+      - key: POSTGRES_URL          # optional persistence (Neon)
+        sync: false
+      - key: CORS_ALLOWED_ORIGINS
+        sync: false
