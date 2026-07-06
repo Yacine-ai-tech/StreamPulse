@@ -66,6 +66,8 @@ export const api = {
     fd.append("source", source);
     return req<IngestResult>("/ingest/csv", { method: "POST", body: fd });
   },
+  replay: (logId: number) =>
+    req<IngestResult>(`/pipeline/replay/${logId}`, { method: "POST" }),
   /** Webhook call with real HMAC-SHA256 signature computed in-browser (WebCrypto).
    *  The secret never leaves the browser except as the signature header. */
   async webhook(source: string, body: string, secret: string, vision = false) {

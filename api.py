@@ -17,11 +17,13 @@ from core.config import settings
 from core.logger import get_logger
 from connectors.webhook_receiver import WebhookReceiver
 from store import (
+    get_ingestion_row,
     get_kpi_metrics,
     get_pipeline_history,
     init_db,
     log_data_ingestion,
     store_kpi_metrics,
+    store_stats,
     update_ingestion_log,
 )
 
@@ -102,7 +104,8 @@ async def health() -> Dict[str, Any]:
 
 @app.post("/ingest/json")
 async def ingest_json(req: IngestJsonRequest) -> Dict[str, Any]:
-    log_id = log_data_ingestion(req.source, "started", records=len(req.records))
+    # payload stored (truncated in store) so events can be inspected and replayed
+    log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20])
     enriched = []
     for r in req.records:
         c = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
@@ -188,7 +191,27 @@ async def webhook_with_vision(
 
 @app.get("/pipeline/status")
 async def pipeline_status() -> Dict[str, Any]:
-    return {"status": "ok", "connected_clients": len(_clients)}
+    out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
+    try:
+        out.update(store_stats())
+    except Exception as e:
+        log.warning("store_stats failed: %s", e)
+    return out
+
+
+@app.post("/pipeline/replay/{log_id}")
+async def pipeline_replay(log_id: int) -> Dict[str, Any]:
+    """Re-ingest the stored payload of a past ingestion event (real replay)."""
+    row = get_ingestion_row(log_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="event_not_found")
+    try:
+        records = json.loads(row.get("payload") or "null")
+    except json.JSONDecodeError:
+        records = None
+    if not records:
+        raise HTTPException(status_code=422, detail="no_stored_payload")
+    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"))
 
 
 @app.get("/pipeline/history")
