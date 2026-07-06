@@ -66,7 +66,7 @@ export default function Automation() {
           n8n handles the orchestration; StreamPulse is the intelligence layer. Workflows deliver raw
           events to <code className="font-mono text-[12px]">/webhook/&#123;source&#125;</code> (HMAC-signed) or{" "}
           <code className="font-mono text-[12px]">/ingest/json</code>; every record is classified
-          (keyword → LLM escalation), optionally vision-enriched by DocIntel, stored, and broadcast to
+          (keyword matching with LLM escalation), optionally vision-enriched by DocIntel, stored, and broadcast to
           the Live Operations stream. A Prefect flow (<code className="font-mono text-[12px]">orchestration/prefect_flow.py</code>)
           covers scheduled batch pulls on the same path.
         </p>
