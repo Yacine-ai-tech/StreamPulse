@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
-import { Pause, Play, Radio, Send } from "lucide-react";
+import { ArrowRight, Pause, Play, Radio, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../kit/AppShell";
 import { Button, Card, Chip, ConfidenceBadge, EmptyState, StatTile } from "../kit/primitives";
@@ -91,7 +91,7 @@ export default function Live() {
               icon={Radio}
               title={state === "ws" ? "Listening — no records yet" : "Waiting for the stream"}
               hint="Send something from the Ingest Playground (even from another tab) and watch it arrive here, classified."
-              action={<Link to="/playground" className="text-sm underline decoration-dotted text-dim hover:text-body"><Send size={12} className="mr-1 inline" />Open Playground →</Link>}
+              action={<Link to="/playground" className="text-sm underline decoration-dotted text-dim hover:text-body"><span className="inline-flex items-center gap-1"><Send size={12} />Open Playground <ArrowRight size={12} /></span></Link>}
             />
           ) : (
             <div className="max-h-[520px] divide-y divide-[var(--border)] overflow-y-auto">
