@@ -6,7 +6,16 @@ import { Link } from "react-router-dom";
 import { PageHeader } from "../kit/AppShell";
 import { Button, Card, Chip, ConfidenceBadge, EmptyState, StatTile } from "../kit/primitives";
 import { JSONViewer } from "../kit/JSONViewer";
+import { PipelineFlow } from "../kit/PipelineFlow";
 import { api, ClassifiedRecord, LiveEvent, openLive } from "../lib/api";
+import { Download, BrainCircuit, Route, Database } from "lucide-react";
+
+const PIPELINE_STAGES = [
+  { id: "ingest", label: "Ingest", icon: Download },
+  { id: "classify", label: "Classify", icon: BrainCircuit },
+  { id: "route", label: "Route", icon: Route },
+  { id: "store", label: "Store", icon: Database },
+];
 
 const DOMAIN_COLORS: Record<string, string> = {
   Finance: "var(--accent-2)",
@@ -161,6 +170,9 @@ export default function Live() {
 
           {selected && (
             <Card title="Record inspector" actions={<button className="text-xs text-muted hover:text-body" onClick={() => setSelected(null)}>close</button>}>
+              <div className="mb-6 mt-2 px-2">
+                <PipelineFlow stages={PIPELINE_STAGES} active={4} done={true} />
+              </div>
               <JSONViewer data={selected.rec} maxHeight={260} />
             </Card>
           )}
