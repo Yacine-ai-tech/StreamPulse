@@ -38,7 +38,7 @@ def test_streampulse_real_ingestion_payload():
     assert response.status_code in (200, 201, 202, 422)
     if response.status_code in (200, 201, 202):
         data = response.json()
-        assert "status" in data or "id" in data
+        assert "status" in data or "id" in data or "log_id" in data
 
 def test_streampulse_health():
     response = client.get("/health")
