@@ -13,7 +13,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -125,7 +125,7 @@ def store_kpi_metrics(records: List[Dict[str, Any]]) -> int:
     """Persist a batch of KPI records. Returns count inserted."""
     init_db()
     count = 0
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     with _conn() as c:
         for r in records:
             try:
@@ -173,7 +173,7 @@ def log_data_ingestion(source: str, status: str, records: int = 0,
                        error: Optional[str] = None, payload: Optional[Any] = None) -> int:
     """Log an ingestion event. Returns the ID."""
     init_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     args = (source, status, records, error,
             json.dumps(payload)[:5000] if payload else None, now, now)
     with _conn() as c:
@@ -191,7 +191,7 @@ def log_data_ingestion(source: str, status: str, records: int = 0,
 def update_ingestion_log(log_id: int, status: str, records: int = 0,
                          error: Optional[str] = None) -> None:
     init_db()
-    now = datetime.utcnow().isoformat()
+    now = datetime.now(timezone.utc).isoformat()
     with _conn() as c:
         c.execute(
             _q(f"UPDATE {_T_LOG} SET status=?, records=?, error=?, updated_at=? WHERE id=?"),
