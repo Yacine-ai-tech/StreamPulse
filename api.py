@@ -10,18 +10,20 @@ from typing import Any, Dict, List, Optional, Set
 import httpx
 from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadFile, WebSocket, WebSocketDisconnect
 from fastapi.middleware.cors import CORSMiddleware
-from fastapi.responses import StreamingResponse
+from fastapi.responses import FileResponse, StreamingResponse
 from pydantic import BaseModel
 
 from core.config import settings
 from core.logger import get_logger
 from connectors.webhook_receiver import WebhookReceiver
 from store import (
+    get_ingestion_row,
     get_kpi_metrics,
     get_pipeline_history,
     init_db,
     log_data_ingestion,
     store_kpi_metrics,
+    store_stats,
     update_ingestion_log,
 )
 
@@ -37,6 +39,18 @@ try:  # browser demo UI (served by the backend, no separate deploy)
     app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
 except RuntimeError:
     log.warning("demo/ directory not found — /demo will not be served")
+
+
+@app.get("/", include_in_schema=False)
+async def dashboard():
+    """Serve the accessible StreamPulse dashboard at the root."""
+    import os
+    root = os.path.dirname(__file__)
+    spa = os.path.join(root, "frontend", "dist", "index.html")
+    if os.path.exists(spa):
+        return FileResponse(spa)
+    path = os.path.join(root, "demo", "index.html")
+    return FileResponse(path) if os.path.exists(path) else {"service": "streampulse", "docs": "/docs"}
 
 try:
     init_db()
@@ -90,7 +104,8 @@ async def health() -> Dict[str, Any]:
 
 @app.post("/ingest/json")
 async def ingest_json(req: IngestJsonRequest) -> Dict[str, Any]:
-    log_id = log_data_ingestion(req.source, "started", records=len(req.records))
+    # payload stored (truncated in store) so events can be inspected and replayed
+    log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20])
     enriched = []
     for r in req.records:
         c = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
@@ -148,28 +163,55 @@ async def webhook_with_vision(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json")
 
-    records = WebhookReceiver.parse_payload(payload, source_name)
-    enriched: List[Dict[str, Any]] = []
-    async with httpx.AsyncClient(timeout=30) as client:
-        for r in records:
-            img_url = (r.get("raw") or {}).get("image_url") if isinstance(r.get("raw"), dict) else None
-            if img_url:
-                try:
-                    img_bytes = (await client.get(img_url)).content
-                    files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
-                    data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
-                    resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data)
-                    r["image_category"] = resp.json().get("category")
-                    r["image_confidence"] = resp.json().get("confidence")
-                except Exception as e:
-                    log.warning("vision compose failed: %s", e)
-            enriched.append(dict(r))
-    return await ingest_json(IngestJsonRequest(records=enriched, source=source_name))
+    try:
+        records = WebhookReceiver.parse_payload(payload, source_name)
+        enriched: List[Dict[str, Any]] = []
+        async with httpx.AsyncClient(timeout=30) as client:
+            for r in records:
+                raw = r.get("raw")
+                # image_url lives at the record top level (parse_payload stores the
+                # original item under "raw"); tolerate a missing/odd shape gracefully.
+                img_url = raw.get("image_url") if isinstance(raw, dict) else None
+                if img_url:
+                    try:
+                        img_bytes = (await client.get(img_url)).content
+                        files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
+                        data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
+                        resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data)
+                        r["image_category"] = resp.json().get("category")
+                        r["image_confidence"] = resp.json().get("confidence")
+                    except Exception as e:
+                        log.warning("vision compose failed: %s", e)
+                enriched.append(dict(r))
+        return await ingest_json(IngestJsonRequest(records=enriched, source=source_name))
+    except Exception as e:
+        log.warning("with-vision processing failed: %s", e)
+        raise HTTPException(status_code=400, detail="invalid_payload")
 
 
 @app.get("/pipeline/status")
 async def pipeline_status() -> Dict[str, Any]:
-    return {"status": "ok", "connected_clients": len(_clients)}
+    out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
+    try:
+        out.update(store_stats())
+    except Exception as e:
+        log.warning("store_stats failed: %s", e)
+    return out
+
+
+@app.post("/pipeline/replay/{log_id}")
+async def pipeline_replay(log_id: int) -> Dict[str, Any]:
+    """Re-ingest the stored payload of a past ingestion event (real replay)."""
+    row = get_ingestion_row(log_id)
+    if not row:
+        raise HTTPException(status_code=404, detail="event_not_found")
+    try:
+        records = json.loads(row.get("payload") or "null")
+    except json.JSONDecodeError:
+        records = None
+    if not records:
+        raise HTTPException(status_code=422, detail="no_stored_payload")
+    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"))
 
 
 @app.get("/pipeline/history")
@@ -199,3 +241,19 @@ async def live_sse(request: Request) -> StreamingResponse:
             yield f"data: {json.dumps(recent)}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ─── SPA serving (registered last so every API route above wins) ─────────────
+import os as _os
+from fastapi.staticfiles import StaticFiles as _StaticFiles
+
+_DIST = _os.path.join(_os.path.dirname(__file__), "frontend", "dist")
+if _os.path.isdir(_os.path.join(_DIST, "assets")):
+    app.mount("/assets", _StaticFiles(directory=_os.path.join(_DIST, "assets")), name="spa_assets")
+
+    @app.get("/{spa_path:path}", include_in_schema=False)
+    async def spa_fallback(spa_path: str):
+        candidate = _os.path.join(_DIST, spa_path)
+        if spa_path and _os.path.isfile(candidate):
+            return FileResponse(candidate)
+        return FileResponse(_os.path.join(_DIST, "index.html"))
