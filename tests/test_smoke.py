@@ -43,6 +43,8 @@ def test_payload_parser():
 
 def test_store_roundtrip(tmp_path, monkeypatch):
     monkeypatch.chdir(tmp_path)
+    import store
+    store._initialized = False
     from store import store_kpi_metrics, get_kpi_metrics, init_db
     init_db()
     n = store_kpi_metrics([{"period": "2026-05", "category": "Finance", "metric": "revenue", "value": 100, "unit": "USD"}])
