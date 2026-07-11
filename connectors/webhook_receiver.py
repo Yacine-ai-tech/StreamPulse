@@ -33,23 +33,43 @@ class WebhookReceiver:
 
     @staticmethod
     def parse_payload(raw_json: Any, source_name: str) -> List[DataRecord]:
-        """Normalize an incoming JSON payload into a list of DataRecord dicts."""
+        """Normalize an incoming JSON payload into a list of DataRecord dicts.
+
+        For non-KPI payloads (e.g. GitHub events, Slack notifications) the
+        required ``metric``, ``value``, ``period``, ``category`` columns are
+        derived from available text so the store never receives a NULL in a
+        NOT-NULL column.
+        """
         if isinstance(raw_json, dict) and "records" in raw_json:
             items = raw_json["records"]
         elif isinstance(raw_json, list):
             items = raw_json
         else:
             items = [raw_json]
-        return [
-            DataRecord({
-                "source": source_name,
-                "period": r.get("period") if isinstance(r, dict) else None,
-                "category": r.get("category") if isinstance(r, dict) else None,
-                "metric": r.get("metric") if isinstance(r, dict) else None,
-                "value": r.get("value") if isinstance(r, dict) else None,
-                "unit": r.get("unit") if isinstance(r, dict) else None,
-                "confidence": r.get("confidence", 0.9) if isinstance(r, dict) else 0.9,
-                "raw": r,
-            })
-            for r in items
-        ]
+
+        records: List[DataRecord] = []
+        for r in items:
+            if isinstance(r, dict):
+                # Try KPI fields directly; fall back to text derived from event
+                raw_text = (
+                    r.get("text") or r.get("title") or r.get("body") or
+                    r.get("action") or r.get("subject") or
+                    str(list(r.values())[0]) if r else "event"
+                )
+                records.append(DataRecord({
+                    "source":     source_name,
+                    "period":     r.get("period", ""),
+                    "category":   r.get("category", source_name),
+                    "metric":     r.get("metric") or raw_text[:100],
+                    "value":      float(r.get("value") or 0),
+                    "unit":       r.get("unit"),
+                    "confidence": float(r.get("confidence", 0.9)),
+                    "raw":        r,
+                }))
+            else:
+                records.append(DataRecord({
+                    "source": source_name, "period": "", "category": source_name,
+                    "metric": str(r)[:100], "value": 0.0,
+                    "unit": None, "confidence": 0.9, "raw": r,
+                }))
+        return records
