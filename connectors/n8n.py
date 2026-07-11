@@ -58,7 +58,7 @@ ALLOWED_NODES = {
     },
     "clickup": {
         "node": "n8n-nodes-base.clickUp",
-        "account": settings.CLICKUP_ACCOUNT,
+        "account": settings.CLICKUP_WORKSPACE_ID,
         "desc_en": "Create tasks, update statuses in ClickUp",
         "desc_fr": "Créer des tâches, mettre à jour les statuts dans ClickUp",
     },
