@@ -23,12 +23,14 @@ class Settings:
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "change_me")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+    if not WEBHOOK_SECRET and os.getenv("ENV") == "production":
+        raise ValueError("WEBHOOK_SECRET must be set in production")
 
-    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "http://localhost:8001")
+    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "https://docintel.omniintel.os")
 
     CORS_ALLOWED_ORIGINS = [
-        o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:5173,http://localhost:8004").split(",")
+        o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
         if o.strip()
     ]
 
