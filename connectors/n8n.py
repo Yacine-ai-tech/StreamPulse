@@ -13,12 +13,8 @@ Free n8n hosting options (documented):
   • Render.com           — free web-service tier (spins down on idle)
   • Self-hosted (Docker) — zero cost, runs on any Linux/macOS/Windows
 
-Account mapping:
-  Gmail primary  : siddoyacinedigital@gmail.com
-  Gmail secondary: siddoyacinetech227@gmail.com
-  Google Drive   : siddoyacinetech227@gmail.com
-  Google Sheets  : siddoyacinetech227@gmail.com  ← replaces Excel
-  ClickUp        : siddoyacinetech227@gmail.com
+Account mapping is now dynamic via environment variables:
+  GMAIL_PRIMARY, DRIVE_ACCOUNT, GSHEETS_ACCOUNT, CLICKUP_WORKSPACE_ID
 """
 from __future__ import annotations
 
