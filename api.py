@@ -100,6 +100,18 @@ try:
 except Exception as e:
     log.warning("init_db at import failed: %s", e)
 
+@app.on_event("startup")
+async def startup_event():
+    import threading
+    from connectors.n8n import n8n
+    def _provision():
+        try:
+            res = n8n.auto_provision()
+            log.info(f"n8n auto-provision result: {res}")
+        except Exception as e:
+            log.error(f"n8n auto-provision failed: {e}")
+    threading.Thread(target=_provision, daemon=True).start()
+
 
 # Try to import upgraded classifier; gracefully degrade
 try:
