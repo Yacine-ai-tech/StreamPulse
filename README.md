@@ -5,6 +5,7 @@
 **Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
 > 🔗 **Live API:** https://streampulse.ysiddo-ai-projects.app/health  ·  live stream at `/live/sse`.
 > On-demand backend (first request ~30–60 s to wake).
+> Self-hosting: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## What It Does
 
@@ -92,3 +93,10 @@ This project collects anonymous, GDPR-compliant startup pings to help the author
 
 <!-- Scarf Analytics Pixel -->
 <img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=2f9d00e2-3011-4c70-853d-83fe87eafb5c" />
+
+## Licensing
+This project is licensed under the [AGPL-3.0 License](LICENSE).
+
+**Commercial Use:** If you wish to use this software commercially without releasing your own source code, please see [COMMERCIAL.md](COMMERCIAL.md) to obtain a commercial license.
+
+**Telemetry:** See [TELEMETRY.md](TELEMETRY.md) for our privacy-first data practices.
