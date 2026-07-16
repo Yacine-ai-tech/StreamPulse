@@ -19,13 +19,58 @@ except ImportError:
 if _DLT:
     @dlt.source(name="gmail_source")
     def gmail_source(query: str = "label:invoices is:unread") -> Iterable[Dict[str, Any]]:
-        """Yield parsed invoice metadata from Gmail (stub — wire to gmail API)."""
-        # Production: query Gmail API for matching messages
+        """Yield parsed invoice metadata from Gmail."""
+        try:
+            from googleapiclient.discovery import build
+            from google.oauth2.credentials import Credentials
+            
+            # Look for standard token file
+            creds = None
+            if os.path.exists('token.json'):
+                creds = Credentials.from_authorized_user_file('token.json', ['https://www.googleapis.com/auth/gmail.readonly'])
+            
+            if creds:
+                service = build('gmail', 'v1', credentials=creds)
+                results = service.users().messages().list(userId='me', q=query).execute()
+                messages = results.get('messages', [])
+                
+                for message in messages:
+                    msg = service.users().messages().get(userId='me', id=message['id']).execute()
+                    yield {
+                        "id": msg['id'],
+                        "snippet": msg['snippet'],
+                        "labels": msg.get('labelIds', []),
+                        "source": "gmail"
+                    }
+        except ImportError:
+            pass
         return []  # type: ignore
 
     @dlt.source(name="gsheet_source")
-    def gsheet_source(sheet_id: str = "") -> Iterable[Dict[str, Any]]:
-        """Yield rows from a Google Sheet (stub)."""
+    def gsheet_source(sheet_id: str = "", range_name: str = "Sheet1!A1:Z") -> Iterable[Dict[str, Any]]:
+        """Yield rows from a Google Sheet."""
+        if not sheet_id:
+            return [] # type: ignore
+        try:
+            from googleapiclient.discovery import build
+            from google.oauth2.credentials import Credentials
+            
+            creds = None
+            if os.path.exists('token.json'):
+                creds = Credentials.from_authorized_user_file('token.json', ['https://www.googleapis.com/auth/spreadsheets.readonly'])
+                
+            if creds:
+                service = build('sheets', 'v4', credentials=creds)
+                sheet = service.spreadsheets()
+                result = sheet.values().get(spreadsheetId=sheet_id, range=range_name).execute()
+                values = result.get('values', [])
+                
+                if values and len(values) > 1:
+                    headers = values[0]
+                    for row in values[1:]:
+                        yield {headers[i]: row[i] if i < len(row) else None for i in range(len(headers))}
+        except ImportError:
+            pass
         return []  # type: ignore
 
     @dlt.source(name="webhook_source")
