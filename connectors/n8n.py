@@ -15,10 +15,10 @@ Free n8n hosting options (documented):
 
 Account mapping:
   Gmail primary  : siddoyacinedigital@gmail.com
-  Gmail secondary: siddoyacinetech227@gmail.com
-  Google Drive   : siddoyacinetech227@gmail.com
-  Google Sheets  : siddoyacinetech227@gmail.com  ← replaces Excel
-  ClickUp        : siddoyacinetech227@gmail.com
+  Gmail secondary: yacinetrainer227@gmail.com
+  Google Drive   : yacinetrainer227@gmail.com
+  Google Sheets  : yacinetrainer227@gmail.com  ← replaces Excel
+  ClickUp        : yacinetrainer227@gmail.com
 """
 from __future__ import annotations
 
