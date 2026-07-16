@@ -1,6 +1,6 @@
 # StreamPulse
 
-[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 **Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
 > 🔗 **Live API:** https://streampulse.ysiddo-ai-projects.app/health  ·  live stream at `/live/sse`.
