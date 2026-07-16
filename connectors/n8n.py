@@ -1,20 +1,9 @@
 """
 n8n integration — restricted to Gmail, Google Drive, Google Sheets, ClickUp.
 
-Excel Online REPLACED with Google Sheets because:
-  • School O365 account (yseybou.aa@ilimi.edu.ne) has no admin to grant
-    Microsoft Graph API permissions (admin consent required for OAuth2).
-  • Google Sheets is 100 % free, uses same Google OAuth2 as Gmail & Drive,
-    and the Sheets API needs NO admin consent — user consent is enough.
-
-Free n8n hosting options (documented):
-  • n8n.cloud free tier  — 5 active workflows, community nodes
-  • Railway.app          — free tier for Docker containers
-  • Render.com           — free web-service tier (spins down on idle)
-  • Self-hosted (Docker) — zero cost, runs on any Linux/macOS/Windows
-
-Account mapping is now dynamic via environment variables:
-  GMAIL_PRIMARY, DRIVE_ACCOUNT, GSHEETS_ACCOUNT, CLICKUP_WORKSPACE_ID
+StreamPulse n8n Integration Orchestrator.
+Manages automated workflow execution, credential auto-provisioning, and 
+cross-application data flow (Google Workspace, ClickUp, Webhooks).
 """
 from __future__ import annotations
 
@@ -139,6 +128,62 @@ class N8NClient:
             }
         except Exception as e:
             return {"status": "error", "error": str(e)}
+
+    def auto_provision(self) -> Dict[str, Any]:
+        """Programmatically setup n8n: upload workflows and set credentials."""
+        if not self.api_key:
+            return {"status": "skipped", "reason": "No N8N_API_KEY configured"}
+            
+        from pathlib import Path
+        results = {"workflows": [], "credentials": [], "errors": []}
+        
+        # 1. Auto-provision ClickUp Credentials if available
+        if self.clickup_api_key:
+            cred_payload = {
+                "name": "StreamPulse ClickUp API",
+                "type": "clickUpApi",
+                "data": {"apiToken": self.clickup_api_key}
+            }
+            res = self._post("/api/v1/credentials", cred_payload)
+            if "error" not in res:
+                results["credentials"].append("clickup")
+                
+        # 2. Auto-provision Google OAuth Credentials if available
+        if self.google_client_id and self.google_client_secret:
+            cred_payload = {
+                "name": "StreamPulse Google OAuth",
+                "type": "googleOAuth2Api",
+                "data": {
+                    "clientId": self.google_client_id,
+                    "clientSecret": self.google_client_secret
+                }
+            }
+            res = self._post("/api/v1/credentials", cred_payload)
+            if "error" not in res:
+                results["credentials"].append("google")
+
+        # 3. Upload Custom Workflows
+        wf_dir = Path(__file__).resolve().parent / "n8n" / "workflows"
+        if wf_dir.exists():
+            for wf_file in wf_dir.glob("*.json"):
+                try:
+                    with open(wf_file, "r") as f:
+                        wf_data = json.load(f)
+                    
+                    # n8n expects the workflow object directly or inside a wrapper
+                    payload = wf_data if "nodes" in wf_data else wf_data.get("workflow", wf_data)
+                    r = self._post("/api/v1/workflows", payload)
+                    if "error" in r:
+                        results["errors"].append(f"Upload {wf_file.name} failed: {r['error']}")
+                    else:
+                        results["workflows"].append(r.get("id") or wf_file.name)
+                        if r.get("id"):
+                            # Activate it!
+                            self.update_workflow_status(r["id"], True)
+                except Exception as e:
+                    results["errors"].append(str(e))
+                    
+        return results
 
     # ── High-level actions ────────────────────────────────────────────
 
