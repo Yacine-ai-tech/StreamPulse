@@ -91,4 +91,4 @@ This project collects anonymous, GDPR-compliant startup pings to help the author
 
 
 <!-- Scarf Analytics Pixel -->
-<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=streampulse-yacine-ai-projects" />
+<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=2f9d00e2-3011-4c70-853d-83fe87eafb5c" />
