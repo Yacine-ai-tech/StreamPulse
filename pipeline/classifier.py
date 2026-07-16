@@ -500,20 +500,82 @@ async def get_realtime_pipeline() -> RealtimePipeline:
 
 
 def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
-    """Hybrid domain classifier (Week 16.5): fast keyword pass, with an optional low-confidence
-    LLM escalation (opt-in via STREAMPULSE_HYBRID_LLM=1). Returns {domain, confidence, method}.
-
-    Embedding-based routing is a future tier; keyword + LLM cover the hybrid chain today.
+    """Hybrid domain classifier: fast keyword pass, vector embedding fallback, and LLM escalation.
+    Tier 1: Fast Keyword matching
+    Tier 2: Vector embedding similarity vs domain prototypes (BAAI/bge-large-en-v1.5)
+    Tier 3: Zero-shot classification via Claude Haiku 4.5
     """
     domain, conf = DomainClassifier.classify(content or "")
-    result: Dict[str, Any] = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
-    if fast_only or conf >= 0.5 or os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
-        return result
-    try:  # low-confidence → escalate to an LLM (sync; only when explicitly enabled)
+    if fast_only or conf >= 0.5:
+        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+        
+    # Tier 2: Vector Embedding Fallback
+    hf_token = os.getenv("HF_TOKEN", "").strip()
+    if hf_token and os.getenv("STREAMPULSE_HYBRID_LLM") == "1":
+        try:
+            import urllib.request, json as _json
+            url = "https://router.huggingface.co/hf-inference/models/BAAI/bge-large-en-v1.5"
+            h = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
+            
+            domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
+            prototypes = [
+                "finance revenue profit margin cash flow ebitda",
+                "operations supply chain inventory logistics throughput",
+                "hr people employee turnover hiring retention",
+                "esg sustainability carbon diversity governance",
+                "it uptime latency incident deployment devops",
+                "general company update news announcement"
+            ]
+            
+            # Embed the content and prototypes
+            inputs = [content[:500]] + prototypes
+            body = _json.dumps({"inputs": inputs}).encode()
+            req = urllib.request.Request(url, data=body, headers=h)
+            res = urllib.request.urlopen(req, timeout=10)
+            embeddings = _json.loads(res.read())
+            
+            if embeddings and len(embeddings) == len(inputs):
+                # Calculate cosine similarity manually to avoid numpy dependency in this microservice
+                content_emb = embeddings[0]
+                proto_embs = embeddings[1:]
+                
+                best_score = -1.0
+                best_domain = "General"
+                
+                def dot_product(v1, v2):
+                    return sum(x * y for x, y in zip(v1, v2))
+                def magnitude(v):
+                    return sum(x * x for x in v) ** 0.5
+                    
+                c_mag = magnitude(content_emb)
+                
+                for idx, p_emb in enumerate(proto_embs):
+                    p_mag = magnitude(p_emb)
+                    if c_mag > 0 and p_mag > 0:
+                        score = dot_product(content_emb, p_emb) / (c_mag * p_mag)
+                        if score > best_score:
+                            best_score = score
+                            best_domain = domains[idx]
+                            
+                if best_score >= 0.5:
+                    return {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
+        except Exception as e:
+            log.warning("Embedding classification failed: %s", e)
+
+    if os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
+        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
+
+    # Tier 3: Zero-shot classification via LLM (Claude Haiku or Gemini)
+    try:
         from litellm import completion
         labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
+        # Use GEMINI as fallback if OpenAI/Anthropic are unavailable, as requested by user
+        model = settings.LLM_JUDGE
+        if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
+            model = "gemini/gemini-1.5-flash"
+            
         resp = completion(
-            model=settings.LLM_DEFAULT,
+            model=model,
             messages=[{"role": "user", "content":
                        f"Classify this into exactly one label from {labels}. "
                        f"Reply with ONLY the label.\n\n{content[:1200]}"}],
@@ -524,7 +586,9 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
             return {"domain": label, "confidence": 0.7, "method": "llm"}
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
-    return result
+        
+    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+
 
 
 __all__ = [

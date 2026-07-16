@@ -1,4 +1,4 @@
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { Code2, lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
 import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 } from "lucide-react";
 import { AppShell } from "./kit/AppShell";
@@ -13,6 +13,7 @@ import Sources from "./pages/Sources";
 import Destinations from "./pages/Destinations";
 import Alerts from "./pages/Alerts";
 import Analytics from "./pages/Analytics";
+import ApiDocs from "./pages/ApiDocs";
 
 const Live = lazy(() => import("./pages/Live"));
 
@@ -26,6 +27,7 @@ const NAV = [
   { to: "/alerts", label: "Alerts", icon: BellRing },
   { to: "/automation", label: "Automation", icon: Workflow },
   { to: "/classifier", label: "Classifier", icon: Split },
+  { to: "/api-docs", label: "API Docs", icon: Code2 },
 ];
 
 export default function App() {
@@ -63,6 +65,7 @@ export default function App() {
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/automation" element={<Automation />} />
               <Route path="/classifier" element={<Classifier />} />
+              <Route path="/api-docs" element={<ApiDocs />} />
               <Route path="*" element={<Live />} />
             </Routes>
           </Suspense>
