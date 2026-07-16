@@ -41,9 +41,9 @@ class Settings:
     # ── Google OAuth2 (Sheets / Drive / Gmail) ────────────────────────
     GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GMAIL_PRIMARY        = os.getenv("GMAIL_PRIMARY", "REDACTED_EMAIL")
-    DRIVE_ACCOUNT        = os.getenv("DRIVE_ACCOUNT", "REDACTED_EMAIL")
-    GSHEETS_ACCOUNT      = os.getenv("GSHEETS_ACCOUNT", "REDACTED_EMAIL")
+    GMAIL_PRIMARY        = os.getenv("GMAIL_PRIMARY", "")
+    DRIVE_ACCOUNT        = os.getenv("DRIVE_ACCOUNT", "")
+    GSHEETS_ACCOUNT      = os.getenv("GSHEETS_ACCOUNT", "")
 
     # ── ClickUp ───────────────────────────────────────────────────────
     CLICKUP_API_KEY       = os.getenv("CLICKUP_API_KEY", "")

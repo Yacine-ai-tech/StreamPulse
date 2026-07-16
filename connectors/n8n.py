@@ -13,12 +13,8 @@ Free n8n hosting options (documented):
   • Render.com           — free web-service tier (spins down on idle)
   • Self-hosted (Docker) — zero cost, runs on any Linux/macOS/Windows
 
-Account mapping:
-  Gmail primary  : REDACTED_EMAIL
-  Gmail secondary: REDACTED_EMAIL
-  Google Drive   : REDACTED_EMAIL
-  Google Sheets  : REDACTED_EMAIL  ← replaces Excel
-  ClickUp        : REDACTED_EMAIL
+Account mapping is now dynamic via environment variables:
+  GMAIL_PRIMARY, DRIVE_ACCOUNT, GSHEETS_ACCOUNT, CLICKUP_WORKSPACE_ID
 """
 from __future__ import annotations
 
