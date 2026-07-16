@@ -41,5 +41,21 @@ if _PREFECT:
         inserted = persist(classified)
         return {"records_in": len(records), "records_inserted": inserted}
 else:
-    def pipeline_flow(records):  # type: ignore
-        return {"records_in": len(records or []), "records_inserted": 0, "stub": True}
+    def pipeline_flow(records: List[Dict[str, Any]]) -> Dict[str, Any]:
+        from pipeline.classifier import classify
+        from store import store_kpi_metrics
+        import logging
+        log = logging.getLogger(__name__)
+        
+        out = []
+        for r in records or []:
+            try:
+                result = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
+                merged = {**r, **(result if isinstance(result, dict) else {})}
+                out.append(merged)
+            except Exception as e:
+                log.warning("classify failed: %s", e)
+                out.append({**r, "domain": "Unknown", "confidence": 0.0})
+                
+        inserted = store_kpi_metrics(out) if out else 0
+        return {"records_in": len(records or []), "records_inserted": inserted}
