@@ -262,17 +262,4 @@ async def live_sse(request: Request) -> StreamingResponse:
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-# ─── SPA serving (registered last so every API route above wins) ─────────────
-import os as _os
-from fastapi.staticfiles import StaticFiles as _StaticFiles
 
-_DIST = _os.path.join(_os.path.dirname(__file__), "frontend", "dist")
-if _os.path.isdir(_os.path.join(_DIST, "assets")):
-    app.mount("/assets", _StaticFiles(directory=_os.path.join(_DIST, "assets")), name="spa_assets")
-
-    @app.get("/{spa_path:path}", include_in_schema=False)
-    async def spa_fallback(spa_path: str):
-        candidate = _os.path.join(_DIST, spa_path)
-        if spa_path and _os.path.isfile(candidate):
-            return FileResponse(candidate)
-        return FileResponse(_os.path.join(_DIST, "index.html"))
