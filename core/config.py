@@ -42,8 +42,8 @@ class Settings:
     GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
     GMAIL_PRIMARY        = os.getenv("GMAIL_PRIMARY", "siddoyacinedigital@gmail.com")
-    DRIVE_ACCOUNT        = os.getenv("DRIVE_ACCOUNT", "siddoyacinetech227@gmail.com")
-    GSHEETS_ACCOUNT      = os.getenv("GSHEETS_ACCOUNT", "siddoyacinetech227@gmail.com")
+    DRIVE_ACCOUNT        = os.getenv("DRIVE_ACCOUNT", "yacinetrainer227@gmail.com")
+    GSHEETS_ACCOUNT      = os.getenv("GSHEETS_ACCOUNT", "yacinetrainer227@gmail.com")
 
     # ── ClickUp ───────────────────────────────────────────────────────
     CLICKUP_API_KEY       = os.getenv("CLICKUP_API_KEY", "")
