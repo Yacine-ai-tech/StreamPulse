@@ -2,16 +2,22 @@
   "name": "Invoice Intake — Gmail → DocIntel → StreamPulse",
   "nodes": [
     {
-      "parameters": { "label": ["INVOICES"] },
-      "name": "Gmail New Invoice",
-      "type": "n8n-nodes-base.gmailTrigger",
+      "parameters": { "path": "invoice-intake-v2", "httpMethod": "POST", "responseMode": "lastNode", "options": {} },
+      "name": "Webhook New Invoice",
+      "type": "n8n-nodes-base.webhook",
       "position": [-200, 0]
     },
     {
       "parameters": {
-        "url": "http://localhost:8001/extract",
+        "url": "https://docintel.ysiddo-ai-projects.app/api/v1/extract",
         "method": "POST",
-        "options": {}
+        "sendBody": true,
+        "specifyBody": "json",
+        "options": {
+          "headers": {
+            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
+          }
+        }
       },
       "name": "DocIntel Extract",
       "type": "n8n-nodes-base.httpRequest",
@@ -19,11 +25,16 @@
     },
     {
       "parameters": {
-        "url": "http://localhost:8004/ingest/json",
+        "url": "https://streampulse.ysiddo-ai-projects.app/ingest/json",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({records: [$json]}) }}"
+        "jsonBody": "={{ JSON.stringify({records: [$json]}) }}",
+        "options": {
+          "headers": {
+            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
+          }
+        }
       },
       "name": "StreamPulse Ingest",
       "type": "n8n-nodes-base.httpRequest",
@@ -31,7 +42,7 @@
     }
   ],
   "connections": {
-    "Gmail New Invoice": { "main": [[{ "node": "DocIntel Extract", "type": "main", "index": 0 }]] },
+    "Webhook New Invoice": { "main": [[{ "node": "DocIntel Extract", "type": "main", "index": 0 }]] },
     "DocIntel Extract": { "main": [[{ "node": "StreamPulse Ingest", "type": "main", "index": 0 }]] }
   }
 }

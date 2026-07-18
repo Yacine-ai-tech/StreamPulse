@@ -11,29 +11,50 @@
     },
     {
       "parameters": {
-        "url": "https://example.com/auctions/feed.json",
+        "url": "https://dummyjson.com/products",
         "options": {}
       },
-      "name": "Fetch Listings",
+      "name": "Fetch Dummy Auctions",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [80, 0]
+      "position": [40, 0]
     },
     {
       "parameters": {
-        "url": "http://localhost:8004/webhook/auction_aggregator/with-vision",
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.products.length > 0 }}",
+              "value2": true
+            }
+          ]
+        }
+      },
+      "name": "Has Products?",
+      "type": "n8n-nodes-base.if",
+      "position": [240, 0]
+    },
+    {
+      "parameters": {
+        "url": "https://streampulse.ysiddo-ai-projects.app/webhook/auction_aggregator/with-vision",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({records: $json.body}) }}",
-        "options": { "headers": [{ "name": "X-Signature-256", "value": "={{ $credentials.streampulseHmac.signature }}" }] }
+        "jsonBody": "={{ JSON.stringify({records: $json.products}) }}",
+        "options": { 
+          "headers": {
+            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026",
+            "X-Signature-256": "={{ $credentials.streampulseHmac.signature }}" 
+          } 
+        }
       },
       "name": "StreamPulse",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [400, 0]
+      "position": [440, -100]
     }
   ],
   "connections": {
-    "Every 15 min": { "main": [[{ "node": "Fetch Listings", "type": "main", "index": 0 }]] },
-    "Fetch Listings": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
+    "Every 15 min": { "main": [[{ "node": "Fetch Dummy Auctions", "type": "main", "index": 0 }]] },
+    "Fetch Dummy Auctions": { "main": [[{ "node": "Has Products?", "type": "main", "index": 0 }]] },
+    "Has Products?": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
   }
 }
