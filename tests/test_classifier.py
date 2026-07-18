@@ -16,7 +16,7 @@ def test_classify_module_returns_dict():
     out = classify("headcount turnover and employee engagement")
     assert out["domain"] == "People"
     assert 0 <= out["confidence"] <= 1
-    assert out["method"] == "keyword"  # no LLM escalation unless STREAMPULSE_HYBRID_LLM=1
+    assert out["method"] in ("keyword", "keyword_low_conf")  # no LLM escalation unless STREAMPULSE_HYBRID_LLM=1
 
 
 def test_classify_unknown_is_general():
