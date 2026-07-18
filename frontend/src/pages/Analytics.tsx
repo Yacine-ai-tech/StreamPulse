@@ -51,7 +51,7 @@ export default function Analytics() {
             <StatTile label="Distinct sources" value={Number(st.distinct_sources ?? 0)} sub={`${st.connected_clients ?? 0} live clients`} />
           </div>
           <Card title="Records by source" className="mt-5" actions={<Chip>top {perSource.length}</Chip>}>
-            {perSource.length === 0 ? (
+            {!Array.isArray(perSource) || perSource.length === 0 ? (
               <EmptyState title="No ingestion volume yet" />
             ) : (
               <div className="h-[280px]">
