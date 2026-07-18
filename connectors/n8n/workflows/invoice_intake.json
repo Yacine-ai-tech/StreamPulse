@@ -1,11 +1,32 @@
 {
-  "name": "Invoice Intake — Gmail → DocIntel → StreamPulse",
+  "name": "Enterprise Invoice Intake (Gmail \u2192 DocIntel \u2192 ClickUp \u2192 StreamPulse)",
   "nodes": [
     {
-      "parameters": { "path": "invoice-intake-v2", "httpMethod": "POST", "responseMode": "lastNode", "options": {} },
-      "name": "Webhook New Invoice",
-      "type": "n8n-nodes-base.webhook",
-      "position": [-200, 0]
+      "parameters": {
+        "pollTimes": {
+          "item": [
+            {
+              "mode": "everyMinute"
+            }
+          ]
+        },
+        "simple": false,
+        "filters": {
+          "q": "has:attachment subject:invoice"
+        }
+      },
+      "name": "Gmail Trigger",
+      "type": "n8n-nodes-base.gmailTrigger",
+      "position": [
+        -400,
+        0
+      ],
+      "credentials": {
+        "gmailOAuth2": {
+          "id": "",
+          "name": "Gmail account"
+        }
+      }
     },
     {
       "parameters": {
@@ -19,9 +40,54 @@
           }
         }
       },
-      "name": "DocIntel Extract",
+      "name": "DocIntel Vision OCR",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [80, 0]
+      "position": [
+        -180,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.extracted_data.total_amount }}",
+              "operation": "larger",
+              "value2": 10000
+            }
+          ]
+        }
+      },
+      "name": "Is High Value? (>10k)",
+      "type": "n8n-nodes-base.if",
+      "position": [
+        40,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "team": "={{$parameter.team}}",
+        "space": "={{$parameter.space}}",
+        "folder": "={{$parameter.folder}}",
+        "list": "={{$parameter.list}}",
+        "name": "=URGENT: Review High Value Invoice from {{$node[\"Gmail Trigger\"].json.from}}",
+        "description": "=Total parsed: ${{$node[\"DocIntel Vision OCR\"].json.extracted_data.total_amount}}"
+      },
+      "name": "ClickUp Alert",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        260,
+        -100
+      ],
+      "credentials": {
+        "clickUpApi": {
+          "id": "",
+          "name": "ClickUp account"
+        }
+      }
     },
     {
       "parameters": {
@@ -29,7 +95,7 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({records: [$json]}) }}",
+        "jsonBody": "={{ JSON.stringify({records: [$node[\"DocIntel Vision OCR\"].json]}) }}",
         "options": {
           "headers": {
             "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
@@ -38,11 +104,63 @@
       },
       "name": "StreamPulse Ingest",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [400, 0]
+      "position": [
+        260,
+        100
+      ]
     }
   ],
   "connections": {
-    "Webhook New Invoice": { "main": [[{ "node": "DocIntel Extract", "type": "main", "index": 0 }]] },
-    "DocIntel Extract": { "main": [[{ "node": "StreamPulse Ingest", "type": "main", "index": 0 }]] }
+    "Gmail Trigger": {
+      "main": [
+        [
+          {
+            "node": "DocIntel Vision OCR",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "DocIntel Vision OCR": {
+      "main": [
+        [
+          {
+            "node": "Is High Value? (>10k)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is High Value? (>10k)": {
+      "main": [
+        [
+          {
+            "node": "ClickUp Alert",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "StreamPulse Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "ClickUp Alert": {
+      "main": [
+        [
+          {
+            "node": "StreamPulse Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
