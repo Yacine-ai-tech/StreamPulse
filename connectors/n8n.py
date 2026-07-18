@@ -142,7 +142,7 @@ class N8NClient:
             cred_payload = {
                 "name": "StreamPulse ClickUp API",
                 "type": "clickUpApi",
-                "data": {"apiToken": self.clickup_api_key}
+                "data": {"accessToken": self.clickup_api_key}
             }
             res = self._post("/api/v1/credentials", cred_payload)
             if "error" not in res:
@@ -172,6 +172,8 @@ class N8NClient:
                     
                     # n8n expects the workflow object directly or inside a wrapper
                     payload = wf_data if "nodes" in wf_data else wf_data.get("workflow", wf_data)
+                    if "settings" not in payload:
+                        payload["settings"] = {}
                     r = self._post("/api/v1/workflows", payload)
                     if "error" in r:
                         results["errors"].append(f"Upload {wf_file.name} failed: {r['error']}")
@@ -281,9 +283,9 @@ class N8NClient:
 
     # ── Programmatic API Methods (v2.0) ──────────────────────────────
 
-    def list_workflows(self, limit: int = 50, offset: int = 0, active_only: bool = False) -> Dict[str, Any]:
+    def list_workflows(self, limit: int = 50, active_only: bool = False) -> Dict[str, Any]:
         """List all n8n workflows with optional filtering."""
-        params = f"?limit={limit}&offset={offset}"
+        params = f"?limit={limit}"
         if active_only:
             params += "&active=true"
         
@@ -318,7 +320,8 @@ class N8NClient:
 
     def update_workflow_status(self, workflow_id: str, active: bool) -> Dict[str, Any]:
         """Enable or disable a workflow."""
-        result = self._patch(f"/api/v1/workflows/{workflow_id}", {"active": active})
+        action = "activate" if active else "deactivate"
+        result = self._post(f"/api/v1/workflows/{workflow_id}/{action}", {})
         
         if result.get("error"):
             log.error(f"Failed to update workflow {workflow_id}: {result['error']}")
@@ -343,7 +346,7 @@ class N8NClient:
             limit: Max results (default 50)
             offset: Pagination offset (default 0)
         """
-        params = f"?limit={limit}&offset={offset}"
+        params = f"?limit={limit}"
         
         if workflow_id:
             params += f"&workflowId={workflow_id}"
