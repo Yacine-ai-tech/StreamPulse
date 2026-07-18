@@ -1,6 +1,6 @@
-import { Code2, lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 } from "lucide-react";
+import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 , Code2 } from "lucide-react";
 import { AppShell } from "./kit/AppShell";
 import { WakingBackend } from "./kit/misc";
 import { Skeleton } from "./kit/primitives";
