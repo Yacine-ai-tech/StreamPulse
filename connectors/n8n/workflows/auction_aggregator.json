@@ -1,37 +1,62 @@
 {
-  "name": "Auction Aggregator → StreamPulse (with vision)",
+  "name": "Auction File Aggregator (Google Drive \u2192 StreamPulse Secure HMAC)",
   "nodes": [
     {
       "parameters": {
-        "rule": { "interval": [{ "field": "minutes", "minutesInterval": 15 }] }
-      },
-      "name": "Every 15 min",
-      "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [-200, 0]
-    },
-    {
-      "parameters": {
-        "url": "https://dummyjson.com/products",
-        "options": {}
-      },
-      "name": "Fetch Dummy Auctions",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [40, 0]
-    },
-    {
-      "parameters": {
-        "conditions": {
-          "boolean": [
+        "pollTimes": {
+          "item": [
             {
-              "value1": "={{ $json.products.length > 0 }}",
-              "value2": true
+              "mode": "everyMinute"
             }
           ]
+        },
+        "folderId": {
+          "__rl": true,
+          "value": "your-folder-id",
+          "mode": "id"
         }
       },
-      "name": "Has Products?",
-      "type": "n8n-nodes-base.if",
-      "position": [240, 0]
+      "name": "Google Drive Trigger",
+      "type": "n8n-nodes-base.googleDriveTrigger",
+      "position": [
+        -200,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "operation": "download",
+        "fileId": "={{ $json.id }}"
+      },
+      "name": "Download File",
+      "type": "n8n-nodes-base.googleDrive",
+      "position": [
+        20,
+        0
+      ],
+      "credentials": {
+        "googleDriveOAuth2Api": {
+          "id": "",
+          "name": "Google Drive account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "options": {}
+      },
+      "name": "Parse CSV/Excel",
+      "type": "n8n-nodes-base.spreadsheetFile",
+      "position": [
+        240,
+        0
+      ]
     },
     {
       "parameters": {
@@ -39,22 +64,61 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({records: $json.products}) }}",
-        "options": { 
+        "jsonBody": "={{ JSON.stringify({records: $json.data}) }}",
+        "options": {
           "headers": {
             "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026",
-            "X-Signature-256": "={{ $credentials.streampulseHmac.signature }}" 
-          } 
+            "X-Signature-256": "={{ $credentials.streampulseHmac.signature }}"
+          }
         }
       },
-      "name": "StreamPulse",
+      "name": "StreamPulse HMAC Push",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [440, -100]
+      "position": [
+        460,
+        0
+      ],
+      "credentials": {
+        "streampulseHmac": {
+          "id": "",
+          "name": "StreamPulse HMAC"
+        }
+      }
     }
   ],
   "connections": {
-    "Every 15 min": { "main": [[{ "node": "Fetch Dummy Auctions", "type": "main", "index": 0 }]] },
-    "Fetch Dummy Auctions": { "main": [[{ "node": "Has Products?", "type": "main", "index": 0 }]] },
-    "Has Products?": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
+    "Google Drive Trigger": {
+      "main": [
+        [
+          {
+            "node": "Download File",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Download File": {
+      "main": [
+        [
+          {
+            "node": "Parse CSV/Excel",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Parse CSV/Excel": {
+      "main": [
+        [
+          {
+            "node": "StreamPulse HMAC Push",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
