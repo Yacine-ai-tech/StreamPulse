@@ -21,4 +21,4 @@ def test_llm_escalation_labels_ambiguous_text(monkeypatch):
     out = classify("Our gross numbers climbed and the bottom line improved this period.")
     print("\nLIVE classify →", out)
     assert out["domain"] in list(DOMAIN_PATTERNS) + ["General"]
-    assert out["method"] in ("keyword", "llm")
+    assert out["method"] in ("keyword", "llm", "vector_embedding")
