@@ -1,20 +1,44 @@
 {
-  "name": "CRM Sync — DummyJSON → StreamPulse",
+  "name": "CRM Sync (ClickUp \u2192 StreamPulse \u2192 Google Sheets Audit)",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
-      "name": "Hourly",
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "name": "Hourly Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [-200, 0]
+      "position": [
+        -200,
+        0
+      ]
     },
     {
       "parameters": {
-        "url": "https://dummyjson.com/todos",
-        "options": {}
+        "operation": "getAll",
+        "team": "={{$parameter.team}}",
+        "space": "={{$parameter.space}}",
+        "folder": "={{$parameter.folder}}",
+        "list": "={{$parameter.list}}"
       },
-      "name": "Get Dummy Tasks",
-      "type": "n8n-nodes-base.httpRequest",
-      "position": [40, 0]
+      "name": "Fetch ClickUp Tasks",
+      "type": "n8n-nodes-base.clickUp",
+      "position": [
+        20,
+        0
+      ],
+      "credentials": {
+        "clickUpApi": {
+          "id": "",
+          "name": "ClickUp account"
+        }
+      }
     },
     {
       "parameters": {
@@ -22,20 +46,82 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "jsonBody": "={{ JSON.stringify({tasks: $json.todos}) }}",
+        "jsonBody": "={{ JSON.stringify({tasks: $json.tasks}) }}",
         "options": {
           "headers": {
             "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
           }
         }
       },
-      "name": "StreamPulse",
+      "name": "StreamPulse Ingest",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [240, 0]
+      "position": [
+        240,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "your-sheet-id",
+          "mode": "id"
+        },
+        "sheetName": {
+          "__rl": true,
+          "value": "AuditLog",
+          "mode": "list"
+        },
+        "options": {}
+      },
+      "name": "Google Sheets Audit Log",
+      "type": "n8n-nodes-base.googleSheets",
+      "position": [
+        460,
+        0
+      ],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "",
+          "name": "Google Sheets account"
+        }
+      }
     }
   ],
   "connections": {
-    "Hourly": { "main": [[{ "node": "Get Dummy Tasks", "type": "main", "index": 0 }]] },
-    "Get Dummy Tasks": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
+    "Hourly Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch ClickUp Tasks",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch ClickUp Tasks": {
+      "main": [
+        [
+          {
+            "node": "StreamPulse Ingest",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "StreamPulse Ingest": {
+      "main": [
+        [
+          {
+            "node": "Google Sheets Audit Log",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   }
 }
