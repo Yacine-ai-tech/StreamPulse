@@ -144,6 +144,36 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
     for ws in dead:
         _clients.discard(ws)
 
+async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
+    """Forward classified records to an external system (e.g. IntelAI) enforcing strict schema."""
+    if not settings.EXTERNAL_WEBHOOK_URL:
+        return
+        
+    import httpx
+    # Wrap the records exactly as IntelAI (or any generic strict system) expects
+    payload = {
+        "source": "StreamPulse",
+        "schema_type": settings.EXTERNAL_WEBHOOK_SCHEMA_TYPE,
+        "data": records
+    }
+    
+    # Pass along the internal mesh token if targeting another internal microservice
+    import os
+    headers = {
+        "Content-Type": "application/json",
+        "X-OmniIntel-Internal-Token": os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "omniintel-prod-internal-2026")
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as client:
+            resp = await client.post(settings.EXTERNAL_WEBHOOK_URL, json=payload, headers=headers)
+            if resp.status_code >= 400:
+                log.error(f"External Webhook Failed: {resp.status_code} - {resp.text}")
+            else:
+                log.info(f"Successfully pushed {len(records)} records to {settings.EXTERNAL_WEBHOOK_URL}")
+    except Exception as e:
+        log.error(f"External Webhook Dispatch Error: {e}")
+
 
 # ─────────────────────────────────────────────────────────────────────────────
 
@@ -167,7 +197,13 @@ async def ingest_json(req: IngestJsonRequest) -> Dict[str, Any]:
         enriched.append({**r, **c})
     inserted = store_kpi_metrics(enriched)
     update_ingestion_log(log_id, "completed", records=inserted)
+    
+    # Broadcast to local WebSockets
     asyncio.create_task(_broadcast({"event": "ingest", "source": req.source, "records": enriched}))
+    
+    # Dispatch Outbound Webhook to IntelAI or custom CRM
+    asyncio.create_task(_dispatch_external_webhook(enriched))
+    
     return {"source": req.source, "records_in": len(req.records), "records_inserted": inserted, "log_id": log_id}
 
 
