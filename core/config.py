@@ -38,6 +38,10 @@ class Settings:
     N8N_BASE_URL  = os.getenv("N8N_BASE_URL", "")
     N8N_API_KEY   = os.getenv("N8N_API_KEY", "")
 
+    # ── Outbound Webhook Integration (e.g., to IntelAI) ───────────────
+    EXTERNAL_WEBHOOK_URL = os.getenv("EXTERNAL_WEBHOOK_URL", "")
+    EXTERNAL_WEBHOOK_SCHEMA_TYPE = os.getenv("EXTERNAL_WEBHOOK_SCHEMA_TYPE", "kpi_metrics")
+
     # ── Google OAuth2 (Sheets / Drive / Gmail) ────────────────────────
     GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")

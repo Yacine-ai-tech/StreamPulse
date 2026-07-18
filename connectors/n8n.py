@@ -136,6 +136,7 @@ class N8NClient:
             
         from pathlib import Path
         results = {"workflows": [], "credentials": [], "errors": []}
+        cred_ids = {}
         
         # 1. Auto-provision ClickUp Credentials if available
         if self.clickup_api_key:
@@ -145,22 +146,25 @@ class N8NClient:
                 "data": {"accessToken": self.clickup_api_key}
             }
             res = self._post("/api/v1/credentials", cred_payload)
-            if "error" not in res:
+            if "error" not in res and res.get("id"):
                 results["credentials"].append("clickup")
+                cred_ids["clickUpApi"] = res["id"]
                 
-        # 2. Auto-provision Google OAuth Credentials if available
+        # 2. Auto-provision Google OAuth Credentials
         if self.google_client_id and self.google_client_secret:
-            cred_payload = {
-                "name": "StreamPulse Google OAuth",
-                "type": "googleOAuth2Api",
-                "data": {
-                    "clientId": self.google_client_id,
-                    "clientSecret": self.google_client_secret
+            for g_type in ["gmailOAuth2", "googleDriveOAuth2", "googleSheetsOAuth2"]:
+                cred_payload = {
+                    "name": f"StreamPulse {g_type}",
+                    "type": g_type,
+                    "data": {
+                        "clientId": self.google_client_id,
+                        "clientSecret": self.google_client_secret
+                    }
                 }
-            }
-            res = self._post("/api/v1/credentials", cred_payload)
-            if "error" not in res:
-                results["credentials"].append("google")
+                res = self._post("/api/v1/credentials", cred_payload)
+                if "error" not in res and res.get("id"):
+                    results["credentials"].append(g_type)
+                    cred_ids[g_type] = res["id"]
 
         # 3. Upload Custom Workflows
         wf_dir = Path(__file__).resolve().parent / "n8n" / "workflows"
@@ -170,17 +174,24 @@ class N8NClient:
                     with open(wf_file, "r") as f:
                         wf_data = json.load(f)
                     
-                    # n8n expects the workflow object directly or inside a wrapper
                     payload = wf_data if "nodes" in wf_data else wf_data.get("workflow", wf_data)
                     if "settings" not in payload:
                         payload["settings"] = {}
+                        
+                    # Inject credential IDs dynamically
+                    for node in payload.get("nodes", []):
+                        if "credentials" in node:
+                            for c_type, c_data in node["credentials"].items():
+                                if c_type in cred_ids:
+                                    c_data["id"] = cred_ids[c_type]
+                                    
                     r = self._post("/api/v1/workflows", payload)
                     if "error" in r:
                         results["errors"].append(f"Upload {wf_file.name} failed: {r['error']}")
                     else:
                         results["workflows"].append(r.get("id") or wf_file.name)
                         if r.get("id"):
-                            # Activate it!
+                            # Try to activate it (will fail for OAuth if not signed in yet)
                             self.update_workflow_status(r["id"], True)
                 except Exception as e:
                     results["errors"].append(str(e))

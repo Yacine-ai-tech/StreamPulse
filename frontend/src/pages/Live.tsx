@@ -142,7 +142,7 @@ export default function Live() {
 
         <div className="space-y-4">
           <Card title="Domain distribution" actions={<Chip>session</Chip>}>
-            {domains.length === 0 ? (
+            {!Array.isArray(domains) || domains.length === 0 ? (
               <EmptyState title="No data yet" />
             ) : (
               <div className="h-[200px]">
