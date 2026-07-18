@@ -1,5 +1,5 @@
 {
-  "name": "CRM Sync — Sheets → StreamPulse",
+  "name": "CRM Sync — DummyJSON → StreamPulse",
   "nodes": [
     {
       "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 1 }] } },
@@ -8,25 +8,34 @@
       "position": [-200, 0]
     },
     {
-      "parameters": { "sheetName": "CRM Pipeline" },
-      "name": "Read Sheet",
-      "type": "n8n-nodes-base.googleSheets",
-      "position": [80, 0]
+      "parameters": {
+        "url": "https://dummyjson.com/todos",
+        "options": {}
+      },
+      "name": "Get Dummy Tasks",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [40, 0]
     },
     {
       "parameters": {
-        "url": "http://localhost:8004/ingest/json",
+        "url": "https://streampulse.ysiddo-ai-projects.app/ingest/json",
         "method": "POST",
         "sendBody": true,
-        "specifyBody": "json"
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify({tasks: $json.todos}) }}",
+        "options": {
+          "headers": {
+            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
+          }
+        }
       },
       "name": "StreamPulse",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [400, 0]
+      "position": [240, 0]
     }
   ],
   "connections": {
-    "Hourly": { "main": [[{ "node": "Read Sheet", "type": "main", "index": 0 }]] },
-    "Read Sheet": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
+    "Hourly": { "main": [[{ "node": "Get Dummy Tasks", "type": "main", "index": 0 }]] },
+    "Get Dummy Tasks": { "main": [[{ "node": "StreamPulse", "type": "main", "index": 0 }]] }
   }
 }
