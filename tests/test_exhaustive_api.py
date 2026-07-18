@@ -5,6 +5,7 @@ import os
 TOKEN = os.getenv('OMNIINTEL_INTERNAL_TOKEN', 'omniintel-prod-internal-2026')
 HEADERS = {'X-OmniIntel-Internal-Token': TOKEN}
 BASE_URL = os.getenv('TEST_BASE_URL', 'https://gateway.ysiddo-ai-projects.app/streampulse')
+log_id = \"test\"
 
 @pytest.mark.asyncio
 async def test_e2e_api_get___0():
