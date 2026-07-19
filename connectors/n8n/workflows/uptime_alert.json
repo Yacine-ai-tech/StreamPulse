@@ -1,0 +1,51 @@
+{
+  "name": "Uptime Alerting & Notification",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 10 }] } },
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "https://gateway.ysiddo-ai-projects.app/api/uptime/status",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            { "name": "Authorization", "value": "Bearer ysiddo-ai-projects_vol1-session-2026" }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Check KV Uptime Status",
+      "type": "n8n-nodes-base.httpRequest",
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "jsCode": "const data = $input.first().json;\nconst downServices = [];\nfor (const [service, stats] of Object.entries(data)) {\n  if (stats.latestStatus === 'DOWN') {\n    downServices.push(`${service} (Last seen down: ${stats.lastDown || 'unknown'})`);\n  }\n}\nif (downServices.length > 0) {\n  return [{ json: { downServices: downServices.join('\\n'), count: downServices.length } }];\n}\nreturn [];"
+      },
+      "name": "Filter DOWN Services",
+      "type": "n8n-nodes-base.code",
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "fromEmail": "alerts@ysiddo-ai-projects.app",
+        "toEmail": "contact@ysiddo-ai-projects.app",
+        "subject": "={{ $json.count }} Microservice(s) DOWN",
+        "text": "=URGENT:\n\nThe following services are currently DOWN and failing their 5-minute ping:\n\n{{ $json.downServices }}\n\nPlease check the Omni-Admin dashboard immediately."
+      },
+      "name": "Send Alert Email",
+      "type": "n8n-nodes-base.emailSend",
+      "position": [850, 300]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": { "main": [[{"node": "Check KV Uptime Status"}]] },
+    "Check KV Uptime Status": { "main": [[{"node": "Filter DOWN Services"}]] },
+    "Filter DOWN Services": { "main": [[{"node": "Send Alert Email"}]] }
+  },
+  "settings": { "executionOrder": "v1" }
+}
