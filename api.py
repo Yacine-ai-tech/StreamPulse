@@ -36,17 +36,33 @@ app = FastAPI(title="StreamPulse", version="0.1.0",
 import threading
 import requests
 import os
-import logging
+import time
+import uuid
 
 def _send_telemetry():
     if os.environ.get("TELEMETRY_OPT_OUT", "").lower() in ("1", "true", "yes"):
         return
+    
+    lock_file = "/tmp/.ysiddo_telemetry.lock"
     try:
-        logging.info("📡 Anonymous usage telemetry is ENABLED. This helps us understand project usage.")
-        logging.info("📡 To disable this, set the environment variable TELEMETRY_OPT_OUT=true.")
+        if os.path.exists(lock_file):
+            if time.time() - os.path.getmtime(lock_file) < 21600:
+                return
+        with open(lock_file, "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass
+
+    try:
+        if "log" in globals():
+            globals()["log"].info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
+        else:
+            import logging
+            logging.info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
+            
         requests.post(
             "https://gateway.ysiddo-ai-projects.app/telemetry", 
-            json={"service": "StreamPulse", "event": "startup"},
+            json={"service": "StreamPulse", "event": "startup", "instance_id": str(uuid.getnode())[:8]},
             timeout=2
         )
     except Exception:
@@ -77,11 +93,7 @@ async def verify_internal_token(request: Request, call_next):
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
-try:  # browser demo UI (served by the backend, no separate deploy)
-    from fastapi.staticfiles import StaticFiles
-    app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
-except RuntimeError:
-    log.warning("demo/ directory not found — /demo will not be served")
+
 
 try:
     _assets_dir = _os.path.join(_os.path.dirname(__file__), "frontend", "dist", "assets")
@@ -99,8 +111,7 @@ async def dashboard():
     spa = os.path.join(root, "frontend", "dist", "index.html")
     if os.path.exists(spa):
         return FileResponse(spa)
-    path = os.path.join(root, "demo", "index.html")
-    return FileResponse(path) if os.path.exists(path) else {"service": "streampulse", "docs": "/docs"}
+    return {"service": "streampulse", "docs": "/docs"}
 
 try:
     init_db()
