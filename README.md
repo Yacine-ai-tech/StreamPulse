@@ -77,7 +77,7 @@ ls connectors/n8n/workflows/
 
 ## License
 
-MIT
+AGPL-3.0
 
 ## ⚖️ License & Enterprise Use (Dual-License)
 
