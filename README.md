@@ -75,6 +75,14 @@ ls connectors/n8n/workflows/
 # auction_aggregator.json  invoice_intake.json  crm_sync.json
 ```
 
+## Tests
+
+35 test functions across smoke, API, classifier, webhook, e2e, and exhaustive endpoint coverage:
+
+```bash
+pytest tests/ -q
+```
+
 ## License
 
 AGPL-3.0
