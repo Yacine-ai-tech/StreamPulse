@@ -49,7 +49,7 @@
         "jsonBody": "={{ JSON.stringify({tasks: $json.tasks}) }}",
         "options": {
           "headers": {
-            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026"
+            "X-OmniIntel-Internal-Token": "REDACTED_SECRET"
           }
         }
       },

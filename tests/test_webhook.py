@@ -19,10 +19,10 @@ def test_valid_signature_passes():
 
 
 def test_tampered_payload_fails():
-    secret = "topsecret"
+    secret = 'REDACTED'
     sig = _sign(b'{"value":100}', secret)
     assert not WebhookReceiver.verify_signature(b'{"value":999}', sig, secret=secret)
 
 
 def test_missing_signature_fails():
-    assert not WebhookReceiver.verify_signature(b"x", "", secret="topsecret")
+    assert not WebhookReceiver.verify_signature(b"x", "", secret = 'REDACTED')
