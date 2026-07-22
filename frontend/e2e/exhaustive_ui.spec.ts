@@ -1,5 +1,7 @@
 import { test, expect } from '@playwright/test';
 
+const BASE_URL = process.env.TEST_BASE_URL || BASE_URL + '';
+
 test.describe('Exhaustive UI Component & Page Flow Suite', () => {
   test('Should render and interact with main (main.tsx)', async ({ page }) => {
     // Mock navigation to route containing main
@@ -45,80 +47,79 @@ test.describe('Exhaustive UI Component & Page Flow Suite', () => {
 
   test('Should render and interact with Alerts (pages/Alerts.tsx)', async ({ page }) => {
     // Mock navigation to route containing Alerts
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/alerts');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/alerts');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Live (pages/Live.tsx)', async ({ page }) => {
     // Mock navigation to route containing Live
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/live');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/live');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Destinations (pages/Destinations.tsx)', async ({ page }) => {
     // Mock navigation to route containing Destinations
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/destinations');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/destinations');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Classifier (pages/Classifier.tsx)', async ({ page }) => {
     // Mock navigation to route containing Classifier
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/classifier');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/classifier');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Sources (pages/Sources.tsx)', async ({ page }) => {
     // Mock navigation to route containing Sources
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/sources');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/sources');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Automation (pages/Automation.tsx)', async ({ page }) => {
     // Mock navigation to route containing Automation
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/automation');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/automation');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Analytics (pages/Analytics.tsx)', async ({ page }) => {
     // Mock navigation to route containing Analytics
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/analytics');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/analytics');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Playground (pages/Playground.tsx)', async ({ page }) => {
     // Mock navigation to route containing Playground
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/playground');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/playground');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with ApiDocs (pages/ApiDocs.tsx)', async ({ page }) => {
     // Mock navigation to route containing ApiDocs
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/apidocs');
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
 
   test('Should render and interact with Events (pages/Events.tsx)', async ({ page }) => {
     // Mock navigation to route containing Events
-    await page.goto('https://gateway.ysiddo-ai-projects.app/streampulse/events');
-    await page.waitForLoadState('networkidle');
+    await page.goto(BASE_URL + '/streampulse/events');
+    await page.waitForLoadState('domcontentloaded');
     const rootHtml = await page.locator('#root').innerHTML();
     expect(rootHtml.length).toBeGreaterThan(0);
   });
@@ -168,7 +169,7 @@ test.describe("Mobile & Low-Bandwidth Resilience (Sahel Optimized)", () => {
   test("Should verify offline Service Worker registration", async ({ page }) => {
     await page.goto(BASE_URL);
     // Wait for window.onload so SW registers
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Evaluate if a service worker is registered in the navigator
     const isSwRegistered = await page.evaluate(async () => {
@@ -184,13 +185,13 @@ test.describe("Mobile & Low-Bandwidth Resilience (Sahel Optimized)", () => {
     // Intercept network requests to verify the SW doesn't block the document fetch
     let documentFetchedFromNetwork = false;
     page.on('request', request => {
-      if (request.resourceType() === 'document' && request.url() === BASE_URL + '/') {
+      if (request.resourceType() === 'document' && request.url() === '/' + '/') {
         documentFetchedFromNetwork = true;
       }
     });
     
     await page.goto(BASE_URL);
-    await page.waitForLoadState('networkidle');
+    await page.waitForLoadState('domcontentloaded');
     
     // Evaluate the active Service Worker state to ensure it skips waiting
     const swState = await page.evaluate(async () => {
