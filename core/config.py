@@ -27,7 +27,7 @@ class Settings:
     if not WEBHOOK_SECRET and os.getenv("ENV") == "production":
         raise ValueError("WEBHOOK_SECRET must be set in production")
 
-    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "https://docintel-f4g1.onrender.com")
+    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "https://docintel.ysiddo-ai-projects.app")
 
     CORS_ALLOWED_ORIGINS = [
         o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
