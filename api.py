@@ -179,7 +179,7 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     import os
     headers = {
         "Content-Type": "application/json",
-        "X-OmniIntel-Internal-Token": os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "***ROTATED-SECRET***")
+        "X-OmniIntel-Internal-Token": os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "REDACTED_SECRET")
     }
     
     try:
