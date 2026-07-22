@@ -171,7 +171,7 @@ test.describe('Phase 6 — StreamPulse Edge Cases', () => {
 
   test('API offline: UI does not white-screen', async ({ page }) => {
     // Block all API requests
-    await page.route(`${API_URL}/**`, route => route.abort());
+    await page.route(`${API_URL}/api/**`, route => route.abort());
     await page.goto(`${BASE_URL}/`);
     await page.waitForLoadState('domcontentloaded');
     await assertNoReactCrash(page);

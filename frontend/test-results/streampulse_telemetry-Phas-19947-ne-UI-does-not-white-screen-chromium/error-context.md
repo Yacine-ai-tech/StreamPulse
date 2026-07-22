@@ -142,7 +142,7 @@ Call log:
   192 |       await route.fulfill({ json, status: 200, contentType: 'application/json' });
   193 |     });
   194 | 
-  195 |     await page.goto();
+  195 |     await page.goto(`${BASE_URL}/sources`);
   196 |     await page.waitForLoadState('domcontentloaded');
   197 | 
   198 |     // Simulate clicking the source
