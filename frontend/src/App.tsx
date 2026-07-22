@@ -1,8 +1,9 @@
+import UserGuidePage from './pages/UserGuidePage'
 import BenchmarkPage from './pages/BenchmarkPage';
 import ApiDocsPage from './pages/ApiDocsPage';
 import { lazy, Suspense, useCallback, useEffect, useState } from "react";
 import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 , Code2 } from "lucide-react";
+import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 , Code2 , BookOpen} from "lucide-react";
 import { AppShell } from "./kit/AppShell";
 import { WakingBackend } from "./kit/misc";
 import { Skeleton } from "./kit/primitives";
@@ -30,6 +31,7 @@ const NAV = [
   { to: "/automation", label: "Automation", icon: Workflow },
   { to: "/classifier", label: "Classifier", icon: Split },
   { to: "/api-docs", label: "API Docs", icon: Code2 },
+  { to: "/user-guide", label: "User Guide", icon: BookOpen }
 ];
 
 export default function App() {
@@ -71,6 +73,7 @@ export default function App() {
               <Route path="*" element={<Live />} />
                   <Route path="/benchmark" element={<BenchmarkPage />} />
       <Route path="/api-docs" element={<ApiDocsPage />} />
+      <Route path="/user-guide" element={<UserGuidePage />} />
 </Routes>
           </Suspense>
         )}
