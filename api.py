@@ -74,6 +74,7 @@ threading.Thread(target=_send_telemetry, daemon=True).start()
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import os as _os
 
 @app.middleware("http")
