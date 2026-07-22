@@ -67,7 +67,7 @@
         "jsonBody": "={{ JSON.stringify({records: $json.data}) }}",
         "options": {
           "headers": {
-            "X-OmniIntel-Internal-Token": "omniintel-prod-internal-2026",
+            "X-OmniIntel-Internal-Token": "REDACTED_SECRET",
             "X-Signature-256": "={{ $credentials.streampulseHmac.signature }}"
           }
         }
