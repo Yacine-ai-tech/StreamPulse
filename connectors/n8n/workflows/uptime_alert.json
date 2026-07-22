@@ -13,7 +13,7 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer ysiddo-ai-projects_vol1-session-2026" }
+            { "name": "Authorization", "value": "Bearer REDACTED_SECRET" }
           ]
         },
         "options": {}
