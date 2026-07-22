@@ -69,12 +69,11 @@ export default function App() {
               <Route path="/alerts" element={<Alerts />} />
               <Route path="/automation" element={<Automation />} />
               <Route path="/classifier" element={<Classifier />} />
-              <Route path="/api-docs" element={<ApiDocs />} />
+              <Route path="/api-docs" element={<ApiDocsPage />} />
+              <Route path="/benchmark" element={<BenchmarkPage />} />
+              <Route path="/user-guide" element={<UserGuidePage />} />
               <Route path="*" element={<Live />} />
-                  <Route path="/benchmark" element={<BenchmarkPage />} />
-      <Route path="/api-docs" element={<ApiDocsPage />} />
-      <Route path="/user-guide" element={<UserGuidePage />} />
-</Routes>
+            </Routes>
           </Suspense>
         )}
       </AppShell>
