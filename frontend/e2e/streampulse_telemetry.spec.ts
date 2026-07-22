@@ -17,7 +17,7 @@ async function assertNoReactCrash(page: Page) {
 
 async function getAuthToken(request: any): Promise<string> {
   const resp = await request.post(`${AUTH_URL}/api/login`, {
-    data: { username: 'admin', password = 'REDACTED' }
+    data: { username: 'admin', password: 'fLNtwDH2VaQLbO' }
   }).catch(() => null);
   if (resp && resp.ok()) {
     const body = await resp.json();
@@ -38,7 +38,7 @@ test.describe('Phase 5.2 — StreamPulse Dashboards', () => {
       '/destinations', '/events', '/live', '/playground', '/sources'
     ];
     for (const route of routes) {
-      await page.goto(`${'/'}${route}`);
+      await page.goto(`${BASE_URL}${route}`);
       await page.waitForLoadState('domcontentloaded');
       await assertNoReactCrash(page);
       console.log(`✅ StreamPulse ${route} — OK`);
@@ -192,7 +192,7 @@ test.describe('Phase 5.2 — StreamPulse Mocked Features', () => {
       await route.fulfill({ json, status: 200, contentType: 'application/json' });
     });
 
-    await page.goto();
+    await page.goto(`${BASE_URL}/sources`);
     await page.waitForLoadState('domcontentloaded');
 
     // Simulate clicking the source
