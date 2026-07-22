@@ -338,7 +338,11 @@ class N8NClient:
         result = self._post(f"/api/v1/workflows/{workflow_id}/{action}", {})
         
         if result.get("error"):
-            log.error(f"Failed to update workflow {workflow_id}: {result['error']}")
+            # Expected if credentials are missing during auto-provisioning
+            if result.get("status_code") == 400:
+                log.warning(f"Failed to update workflow {workflow_id} (expected if credentials missing): {result['error']}")
+            else:
+                log.error(f"Failed to update workflow {workflow_id}: {result['error']}")
         else:
             status = "enabled" if active else "disabled"
             log.info(f"Workflow {workflow_id} {status}")
