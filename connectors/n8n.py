@@ -93,7 +93,10 @@ class N8NClient:
             r.raise_for_status()
             return r.json()
         except httpx.HTTPStatusError as exc:
-            log.error("n8n HTTP error %s: %s", exc.response.status_code, exc.response.text[:200])
+            if exc.response.status_code == 400:
+                log.warning("n8n HTTP 400 (expected if credentials missing): %s", exc.response.text[:200])
+            else:
+                log.error("n8n HTTP error %s: %s", exc.response.status_code, exc.response.text[:200])
             return {"error": str(exc), "status_code": exc.response.status_code}
         except Exception as exc:
             log.error("n8n request failed: %s", exc)
