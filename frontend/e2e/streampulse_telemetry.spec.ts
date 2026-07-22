@@ -31,6 +31,28 @@ async function getAuthToken(request: any): Promise<string> {
 // ─────────────────────────────────────────────────────────────────────────────
 test.describe('Phase 5.2 — StreamPulse Dashboards', () => {
 
+  test.beforeEach(async ({ page }) => {
+    await page.route('**/*', async route => {
+      const req = route.request();
+      const url = req.url();
+      if ((req.resourceType() === 'fetch' || req.resourceType() === 'xhr') && url.includes('vercel.app')) {
+        let backendUrl = 'https://intelai-bwhp.onrender.com';
+        if (url.includes('docintel-ui')) backendUrl = 'https://docintel-mm79.onrender.com';
+        else if (url.includes('agentkit-ui')) backendUrl = 'https://agentkit-sbz5.onrender.com';
+        else if (url.includes('rageval-ui')) backendUrl = 'https://rageval-4xh5.onrender.com';
+        else if (url.includes('voiceflow-ui')) backendUrl = 'https://voiceflow-riao.onrender.com';
+        else if (url.includes('streampulse-ui')) backendUrl = 'https://streampulse-gv4o.onrender.com';
+        
+        const pathPart = new URL(url).pathname;
+        const newUrl = backendUrl.replace(/\/$/, '') + pathPart;
+        await route.continue({ url: newUrl });
+      } else {
+        await route.continue();
+      }
+    });
+  });
+
+
   test('All main navigation pages render without crash', async ({ page }) => {
     await page.goto(`${BASE_URL}/`);
     const routes = [
