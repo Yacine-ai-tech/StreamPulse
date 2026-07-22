@@ -27,7 +27,7 @@ def test_health_endpoint():
 def test_webhook_signature_verify():
     from connectors.webhook_receiver import WebhookReceiver
     import hmac, hashlib
-    secret = "change_me"
+    secret = 'REDACTED'
     body = b'{"records": []}'
     sig = "sha256=" + hmac.new(secret.encode(), body, hashlib.sha256).hexdigest()
     assert WebhookReceiver.verify_signature(body, sig, secret=secret) is True

@@ -17,7 +17,7 @@ async function assertNoReactCrash(page: Page) {
 
 async function getAuthToken(request: any): Promise<string> {
   const resp = await request.post(`${AUTH_URL}/api/login`, {
-    data: { username: 'admin', password: 'fLNtwDH2VaQLbO' }
+    data: { username: 'admin', password = 'REDACTED' }
   }).catch(() => null);
   if (resp && resp.ok()) {
     const body = await resp.json();
@@ -214,9 +214,7 @@ test.describe('Phase 5.2 — StreamPulse Mocked Features', () => {
 test.describe('Phase 5.3 — Deep Interactivity', () => {
 
   test('Automation rule creation and destination mapping mock', async ({ page }) => {
-    await page.route('**/api/automation', async route => {
-      await route.fulfill({ json: { success: true, rule_id: 'rule-1' }, status: 200 });
-    });
+    
 
     await page.goto(`${BASE_URL}/automation`);
     await page.waitForLoadState('domcontentloaded');
@@ -242,9 +240,7 @@ test.describe('Phase 5.3 — Deep Interactivity', () => {
 
     // Inject a high-severity alert via window variable or by manipulating DOM for testing
     // Or intercept the alerts polling API
-    await page.route('**/api/alerts', async route => {
-      await route.fulfill({ json: [{ id: 'alert-1', severity: 'critical', message: 'CPU 100%' }], status: 200 });
-    });
+    
     
     // Reload to trigger the intercepted API
     await page.reload();
