@@ -334,8 +334,17 @@ async def ws_live(ws: WebSocket):
     await ws.accept()
     _clients.add(ws)
     try:
+        import asyncio
+        import json
+        from datetime import datetime, timezone
         while True:
-            await ws.receive_text()
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                try:
+                    await ws.send_text(json.dumps({"type": "ping", "timestamp": datetime.now(timezone.utc).isoformat()}))
+                except Exception:
+                    break
     except WebSocketDisconnect:
         _clients.discard(ws)
 
