@@ -146,14 +146,41 @@ except Exception:
         return {"domain": "Operations", "confidence": 0.5}
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# WebSocket clients
+# WebSocket clients & Redis PubSub Fallback
 # ─────────────────────────────────────────────────────────────────────────────
+import os
+import asyncio
+import json
 
 _clients: Set[WebSocket] = set()
+_REDIS_URL = os.getenv("REDIS_URL")
+_redis_pubsub = None
 
+async def _setup_redis():
+    global _redis_pubsub
+    if not _REDIS_URL:
+        return
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(_REDIS_URL)
+        _redis_pubsub = r.pubsub()
+        await _redis_pubsub.subscribe("streampulse_ingest")
+        log.info("✅ Redis PubSub fallback enabled for multi-node broadcast")
+        
+        # Background listener
+        async def _listen():
+            async for message in _redis_pubsub.listen():
+                if message["type"] == "message":
+                    payload = json.loads(message["data"])
+                    await _local_broadcast(payload)
+        
+        asyncio.create_task(_listen())
+    except Exception as e:
+        log.warning(f"Failed to setup Redis fallback: {e}")
 
-async def _broadcast(payload: Dict[str, Any]) -> None:
+async def _local_broadcast(payload: Dict[str, Any]) -> None:
     dead: List[WebSocket] = []
     for ws in list(_clients):
         try:
@@ -162,6 +189,23 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
             dead.append(ws)
     for ws in dead:
         _clients.discard(ws)
+
+async def _broadcast(payload: Dict[str, Any]) -> None:
+    # Always broadcast locally
+    await _local_broadcast(payload)
+    
+    # Broadcast to Redis if available, so other nodes get it
+    if _REDIS_URL:
+        try:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(_REDIS_URL)
+            await r.publish("streampulse_ingest", json.dumps(payload))
+        except Exception as e:
+            log.warning(f"Redis publish failed: {e}")
+
+@app.on_event("startup")
+async def startup_redis():
+    await _setup_redis()
 
 async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     """Forward classified records to an external system (e.g. IntelAI) enforcing strict schema."""
