@@ -51,7 +51,9 @@ export default function UserGuidePage() {
               </h3>
               <p className="text-sm text-gray-300 mb-3">To run StreamPulse locally, ensure the following environment variables are set in your <code>.env</code> file:</p>
               <ul className="list-disc list-inside text-sm font-mono text-green-300 space-y-2 ml-2 bg-gray-950 p-4 rounded-lg">
-                <li><code>PULSE_DB_PATH</code></li>\n<li><code>KAFKA_BROKER_URL</code></li>
+                <li><code>PULSE_DB_PATH</code></li>
+                <li><code>MESSAGE_BROKER</code></li>
+                <li><code>REDIS_URL</code></li>
               </ul>
               <p className="text-sm text-gray-300 mt-4">Once configured, start the backend services using <code>docker-compose</code> or the respective python runner script before accessing this frontend.</p>
             </div>
