@@ -572,7 +572,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         # Use GEMINI as fallback if OpenAI/Anthropic are unavailable, as requested by user
         model = settings.LLM_JUDGE
         if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
-            model = "gemini/gemini-1.5-flash"
+            model = "gemini/gemini-2.0-flash-lite"
             
         resp = completion(
             model=model,
