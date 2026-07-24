@@ -147,29 +147,44 @@ except Exception:
 
 
 
+
 # ─────────────────────────────────────────────────────────────────────────────
-# WebSocket clients & Redis PubSub Fallback
+# WebSocket clients & Message Broker (Redis/Kafka)
 # ─────────────────────────────────────────────────────────────────────────────
 import os
 import asyncio
 import json
 
 _clients: Set[WebSocket] = set()
+
+_MESSAGE_BROKER = os.getenv("MESSAGE_BROKER", "redis").lower()
 _REDIS_URL = os.getenv("REDIS_URL")
+_KAFKA_BROKER_URL = os.getenv("KAFKA_BROKER_URL")
+
 _redis_pubsub = None
+_kafka_producer = None
+_kafka_consumer = None
+
+async def _setup_broker():
+    if _MESSAGE_BROKER == "redis":
+        await _setup_redis()
+    elif _MESSAGE_BROKER == "kafka":
+        await _setup_kafka()
+    else:
+        log.warning(f"Unknown MESSAGE_BROKER: {_MESSAGE_BROKER}")
 
 async def _setup_redis():
     global _redis_pubsub
     if not _REDIS_URL:
+        log.warning("MESSAGE_BROKER=redis but REDIS_URL is not set")
         return
     try:
         import redis.asyncio as aioredis
         r = aioredis.from_url(_REDIS_URL)
         _redis_pubsub = r.pubsub()
         await _redis_pubsub.subscribe("streampulse_ingest")
-        log.info("✅ Redis PubSub fallback enabled for multi-node broadcast")
+        log.info("✅ Redis PubSub broker enabled for multi-node broadcast")
         
-        # Background listener
         async def _listen():
             async for message in _redis_pubsub.listen():
                 if message["type"] == "message":
@@ -178,7 +193,34 @@ async def _setup_redis():
         
         asyncio.create_task(_listen())
     except Exception as e:
-        log.warning(f"Failed to setup Redis fallback: {e}")
+        log.warning(f"Failed to setup Redis broker: {e}")
+
+async def _setup_kafka():
+    global _kafka_producer, _kafka_consumer
+    if not _KAFKA_BROKER_URL:
+        log.warning("MESSAGE_BROKER=kafka but KAFKA_BROKER_URL is not set")
+        return
+    try:
+        from aiokafka import AIOKafkaProducer, AIOKafkaConsumer # type: ignore
+        _kafka_producer = AIOKafkaProducer(bootstrap_servers=_KAFKA_BROKER_URL)
+        await _kafka_producer.start()
+        
+        _kafka_consumer = AIOKafkaConsumer(
+            "streampulse_ingest",
+            bootstrap_servers=_KAFKA_BROKER_URL,
+            group_id="streampulse-group"
+        )
+        await _kafka_consumer.start()
+        log.info("✅ Kafka broker enabled for multi-node broadcast")
+
+        async def _listen():
+            async for msg in _kafka_consumer:
+                payload = json.loads(msg.value.decode("utf-8"))
+                await _local_broadcast(payload)
+                
+        asyncio.create_task(_listen())
+    except Exception as e:
+        log.warning(f"Failed to setup Kafka broker: {e}")
 
 async def _local_broadcast(payload: Dict[str, Any]) -> None:
     dead: List[WebSocket] = []
@@ -194,18 +236,25 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
     # Always broadcast locally
     await _local_broadcast(payload)
     
-    # Broadcast to Redis if available, so other nodes get it
-    if _REDIS_URL:
+    msg_str = json.dumps(payload)
+    
+    if _MESSAGE_BROKER == "redis" and _REDIS_URL:
         try:
             import redis.asyncio as aioredis
             r = aioredis.from_url(_REDIS_URL)
-            await r.publish("streampulse_ingest", json.dumps(payload))
+            await r.publish("streampulse_ingest", msg_str)
         except Exception as e:
             log.warning(f"Redis publish failed: {e}")
+            
+    elif _MESSAGE_BROKER == "kafka" and _kafka_producer:
+        try:
+            await _kafka_producer.send_and_wait("streampulse_ingest", msg_str.encode("utf-8"))
+        except Exception as e:
+            log.warning(f"Kafka publish failed: {e}")
 
 @app.on_event("startup")
-async def startup_redis():
-    await _setup_redis()
+async def startup_broker():
+    await _setup_broker()
 
 async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     """Forward classified records to an external system (e.g. IntelAI) enforcing strict schema."""
