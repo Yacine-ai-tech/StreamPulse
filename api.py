@@ -301,7 +301,14 @@ class IngestJsonRequest(BaseModel):
 
 @app.get("/health")
 async def health() -> Dict[str, Any]:
-    return {"status": "ok", "service": "streampulse", "version": "0.1.0"}
+    db_status = "ok"
+    try:
+        from store import _get_conn
+        with _get_conn() as conn:
+            conn.execute("SELECT 1")
+    except Exception as e:
+        db_status = f"error: {str(e)}"
+    return {"status": "ok" if db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": db_status}
 
 
 @app.post("/ingest/json")
