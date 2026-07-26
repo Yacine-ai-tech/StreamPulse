@@ -299,16 +299,25 @@ class IngestJsonRequest(BaseModel):
     source: str = "manual_json"
 
 
+_last_db_check = 0.0
+_cached_db_status = "ok"
+
 @app.get("/health")
 async def health() -> Dict[str, Any]:
-    db_status = "ok"
-    try:
-        from store import _get_conn
-        with _get_conn() as conn:
-            conn.execute("SELECT 1")
-    except Exception as e:
-        db_status = f"error: {str(e)}"
-    return {"status": "ok" if db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": db_status}
+    global _last_db_check, _cached_db_status
+    import time
+    now = time.time()
+    if now - _last_db_check > 3600:
+        try:
+            from store import _get_conn
+            with _get_conn() as conn:
+                conn.execute("SELECT 1")
+            _cached_db_status = "ok"
+        except Exception as e:
+            _cached_db_status = f"error: {str(e)}"
+        _last_db_check = now
+    return {"status": "ok" if _cached_db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": _cached_db_status}
+
 
 
 @app.post("/ingest/json")
