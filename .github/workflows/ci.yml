@@ -295,8 +295,14 @@ jobs:
           INTERNAL_TOKEN: ${{ secrets.OMNIINTEL_INTERNAL_TOKEN }}
         run: |
           if [ -f "tests/test_exhaustive_api.py" ]; then
-            python -m pytest tests/test_exhaustive_api.py -o addopts=""
+            timeout 120 python -m pytest tests/test_exhaustive_api.py -o addopts="" --timeout=120
           elif [ -f "tests/test_e2e.py" ]; then
+            timeout 120 python -m pytest tests/test_e2e.py -o addopts="" --timeout=120
+          elif [ -f "tests/test_api.py" ]; then
+            timeout 60 python -m pytest tests/test_api.py -o addopts="" --timeout=60
+          else
+            echo "No test files found, skipping"
+          fi
             python -m pytest tests/test_e2e.py -o addopts=""
           else
             echo "No integration tests found."
