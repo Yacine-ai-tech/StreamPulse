@@ -309,8 +309,8 @@ async def health() -> Dict[str, Any]:
     now = time.time()
     if now - _last_db_check > 10:
         try:
-            from store import _get_conn
-            with _get_conn() as conn:
+            from store import _conn
+            with _conn() as conn:
                 conn.execute("SELECT 1")
             _cached_db_status = "ok"
         except Exception as e:
