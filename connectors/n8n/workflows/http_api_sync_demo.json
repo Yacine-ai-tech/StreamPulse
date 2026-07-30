@@ -31,7 +31,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "http://localhost:8000/webhook/ingest",
+        "url": "https://intelai.ysiddo-ai-projects.app/api/v1/ingest/webhook",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
