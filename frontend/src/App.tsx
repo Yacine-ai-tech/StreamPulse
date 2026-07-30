@@ -1,9 +1,9 @@
-import UserGuidePage from './pages/UserGuidePage'
+import UserGuidePage from './pages/UserGuidePage';
 import BenchmarkPage from './pages/BenchmarkPage';
 import ApiDocsPage from './pages/ApiDocsPage';
-import { lazy, Suspense, useCallback, useEffect, useState } from "react";
-import { BrowserRouter, Route, Routes } from "react-router-dom";
-import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3 , Code2 , BookOpen} from "lucide-react";
+import { Component, ReactNode, lazy, Suspense, useCallback, useEffect, useState } from "react";
+import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
+import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3, Code2, BookOpen } from "lucide-react";
 import { AppShell } from "./kit/AppShell";
 import { WakingBackend } from "./kit/misc";
 import { Skeleton } from "./kit/primitives";
@@ -16,9 +16,58 @@ import Sources from "./pages/Sources";
 import Destinations from "./pages/Destinations";
 import Alerts from "./pages/Alerts";
 import Analytics from "./pages/Analytics";
-import ApiDocs from "./pages/ApiDocs";
 
 const Live = lazy(() => import("./pages/Live"));
+
+interface ErrorBoundaryState {
+  hasError: boolean;
+  error: Error | null;
+  resetKey?: string;
+}
+
+class ErrorBoundary extends Component<{ children: ReactNode; resetKey?: string }, ErrorBoundaryState> {
+  state: ErrorBoundaryState = { hasError: false, error: null, resetKey: this.props.resetKey };
+
+  static getDerivedStateFromProps(props: { resetKey?: string }, state: ErrorBoundaryState) {
+    if (props.resetKey !== state.resetKey) {
+      return { hasError: false, error: null, resetKey: props.resetKey };
+    }
+    return null;
+  }
+
+  static getDerivedStateFromError(error: Error): ErrorBoundaryState {
+    return { hasError: true, error };
+  }
+
+  componentDidCatch(error: Error, errorInfo: any) {
+    console.error("StreamPulse UI Error caught by boundary:", error, errorInfo);
+  }
+
+  render() {
+    if (this.state.hasError) {
+      return (
+        <div className="p-8 text-center text-red-400 bg-red-950/30 rounded-xl border border-red-800/50 m-4">
+          <h2 className="text-xl font-bold mb-2">Component Error</h2>
+          <p className="text-sm opacity-80 mb-4">{this.state.error?.message || "An unexpected error occurred."}</p>
+          <div className="flex gap-2 justify-center">
+            <button
+              onClick={() => this.setState({ hasError: false, error: null })}
+              className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white font-medium rounded-lg text-sm transition"
+            >
+              Try Again
+            </button>
+          </div>
+        </div>
+      );
+    }
+    return this.props.children;
+  }
+}
+
+function RouteErrorBoundary({ children }: { children: ReactNode }) {
+  const location = useLocation();
+  return <ErrorBoundary resetKey={location.pathname}>{children}</ErrorBoundary>;
+}
 
 const NAV = [
   { to: "/", label: "Live Operations", icon: Radio },
@@ -59,21 +108,23 @@ export default function App() {
           <WakingBackend waking={attempts < 6} onRetry={() => setAttempts(0)} />
         ) : (
           <Suspense fallback={<Skeleton className="h-64 w-full" />}>
-            <Routes>
-              <Route path="/" element={<Live />} />
-              <Route path="/events" element={<Events />} />
-              <Route path="/playground" element={<Playground />} />
-              <Route path="/sources" element={<Sources />} />
-              <Route path="/destinations" element={<Destinations />} />
-              <Route path="/analytics" element={<Analytics />} />
-              <Route path="/alerts" element={<Alerts />} />
-              <Route path="/automation" element={<Automation />} />
-              <Route path="/classifier" element={<Classifier />} />
-              <Route path="/api-docs" element={<ApiDocsPage />} />
-              <Route path="/benchmark" element={<BenchmarkPage />} />
-              <Route path="/user-guide" element={<UserGuidePage />} />
-              <Route path="*" element={<Live />} />
-            </Routes>
+            <RouteErrorBoundary>
+              <Routes>
+                <Route path="/" element={<Live />} />
+                <Route path="/events" element={<Events />} />
+                <Route path="/playground" element={<Playground />} />
+                <Route path="/sources" element={<Sources />} />
+                <Route path="/destinations" element={<Destinations />} />
+                <Route path="/analytics" element={<Analytics />} />
+                <Route path="/alerts" element={<Alerts />} />
+                <Route path="/automation" element={<Automation />} />
+                <Route path="/classifier" element={<Classifier />} />
+                <Route path="/api-docs" element={<ApiDocsPage />} />
+                <Route path="/benchmark" element={<BenchmarkPage />} />
+                <Route path="/user-guide" element={<UserGuidePage />} />
+                <Route path="*" element={<Live />} />
+              </Routes>
+            </RouteErrorBoundary>
           </Suspense>
         )}
       </AppShell>
