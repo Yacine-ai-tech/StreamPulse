@@ -32,11 +32,11 @@ if _PG_URL:
     except ImportError:
         log.warning("POSTGRES_URL set but psycopg not installed — falling back to SQLite")
 
-_T_KPI = "sp_kpi_metrics" if _PG else "kpi_metrics"
-_T_LOG = "sp_ingestion_log" if _PG else "ingestion_log"
+_T_KPI = "sp_kpi_metrics"
+_T_LOG = "sp_ingestion_log"
 
 _SCHEMA_SQLITE = """
-CREATE TABLE IF NOT EXISTS kpi_metrics (
+CREATE TABLE IF NOT EXISTS sp_kpi_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     period TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -47,10 +47,10 @@ CREATE TABLE IF NOT EXISTS kpi_metrics (
     confidence REAL,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_kpi_cat ON kpi_metrics(category);
-CREATE INDEX IF NOT EXISTS idx_kpi_period ON kpi_metrics(period);
+CREATE INDEX IF NOT EXISTS idx_sp_kpi_cat ON sp_kpi_metrics(category);
+CREATE INDEX IF NOT EXISTS idx_sp_kpi_period ON sp_kpi_metrics(period);
 
-CREATE TABLE IF NOT EXISTS ingestion_log (
+CREATE TABLE IF NOT EXISTS sp_ingestion_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,
     status TEXT NOT NULL,
