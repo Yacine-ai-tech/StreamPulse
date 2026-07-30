@@ -1,4 +1,9 @@
-"""Slim StreamPulse configuration."""
+"""
+StreamPulse configuration — runtime settings loaded from environment variables.
+
+All API keys and secrets must be supplied via environment variables.
+Defaults are safe for local development; always override in production.
+"""
 from __future__ import annotations
 
 import os
@@ -57,15 +62,17 @@ class Settings:
 settings = Settings()
 
 
-# --- OPENAI TO GEMINI FALLBACK LOGIC ---
+# Gemini model fallback — when OPENAI_API_KEY is absent but GEMINI_API_KEY is
+# present, any LLM model string referencing OpenAI/GPT is remapped to Gemini
+# Flash automatically, requiring no code-level changes when switching providers.
 def _apply_gemini_fallback():
     openai_key = getattr(settings, "OPENAI_API_KEY", "") or os.getenv("OPENAI_API_KEY", "")
     gemini_key = getattr(settings, "GEMINI_API_KEY", "") or os.getenv("GEMINI_API_KEY", "")
-    
+
     if not openai_key and gemini_key:
         def fallback(model_str):
             if model_str and ("openai" in model_str.lower() or "gpt-" in model_str.lower()):
-                return "gemini/gemini-1.5-flash"
+                return "gemini/gemini-2.5-flash"
             return model_str
             
         for attr in dir(settings):
