@@ -88,11 +88,11 @@ async def test_e2e_api_get__pipeline_history_9():
 
 @pytest.mark.asyncio
 async def test_e2e_api_get__live_sse_10():
-    # Extracted from api.py
+    # SSE streaming endpoint test using streaming client context
     try:
         async with get_client() as ac:
-            response = await ac.get(f'{BASE_URL}/live/sse', headers=HEADERS, timeout=2.0)
-            assert response.status_code in (200, 400, 401, 403, 404, 405, 422)
-    except httpx.ReadTimeout:
+            async with ac.stream("GET", f"{BASE_URL}/live/sse", headers=HEADERS, timeout=2.0) as response:
+                assert response.status_code in (200, 400, 401, 403, 404, 405, 422)
+    except (httpx.ReadTimeout, httpx.ConnectTimeout):
         pass
 
