@@ -25,7 +25,7 @@
       "displayName": "URL",
       "name": "url",
       "type": "string",
-      "default": "https://streampulse.ysiddo-ai-projects.app/webhook/ingest",
+      "default": "http://localhost:8000/webhook/ingest",
       "description": "StreamPulse Webhook URL"
     },
     {

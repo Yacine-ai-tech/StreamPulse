@@ -9,7 +9,7 @@
     },
     {
       "parameters": {
-        "url": "https://gateway.ysiddo-ai-projects.app/api/uptime/status",
+        "url": "http://localhost:8000/api/uptime/status",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
