@@ -7,7 +7,7 @@ import httpx
 import json
 
 # Deployed service URL
-STREAMPULSE_URL = "https://streampulse.ysiddo-ai-projects.app"
+STREAMPULSE_URL = "http://localhost:8000"
 
 def test_health():
     """Test health endpoint"""

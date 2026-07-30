@@ -14,7 +14,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://streampulse.ysiddo-ai-projects.app/webhook/ingest",
+        "url": "http://localhost:8000/webhook/ingest",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
