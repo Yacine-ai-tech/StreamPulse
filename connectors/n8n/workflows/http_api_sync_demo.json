@@ -31,7 +31,7 @@
     {
       "parameters": {
         "method": "POST",
-        "url": "https://intelai.ysiddo-ai-projects.app/api/v1/ingest/webhook",
+        "url": "={{ $env.STREAMPULSE_API_URL || 'http://localhost:8000' }}/ingest/json",
         "sendBody": true,
         "bodyParameters": {
           "parameters": [
