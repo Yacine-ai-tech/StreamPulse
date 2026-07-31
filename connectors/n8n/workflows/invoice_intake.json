@@ -30,13 +30,13 @@
     },
     {
       "parameters": {
-        "url": "https://docintel.ysiddo-ai-projects.app/extract",
+        "url": "={{ $env.DOCINTEL_API_URL || 'http://localhost:8000' }}/extract",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "options": {
           "headers": {
-            "X-OmniIntel-Internal-Token": "CHANGE_ME"
+            "X-OmniIntel-Internal-Token": "={{ $env.INTERNAL_SERVICE_TOKEN || 'CHANGE_ME' }}"
           }
         }
       },
@@ -91,14 +91,14 @@
     },
     {
       "parameters": {
-        "url": "https://streampulse.ysiddo-ai-projects.app/ingest/json",
+        "url": "={{ $env.STREAMPULSE_API_URL || 'http://localhost:8000' }}/ingest/json",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({records: [$node[\"DocIntel Vision OCR\"].json]}) }}",
         "options": {
           "headers": {
-            "X-OmniIntel-Internal-Token": "CHANGE_ME"
+            "X-OmniIntel-Internal-Token": "={{ $env.INTERNAL_SERVICE_TOKEN || 'CHANGE_ME' }}"
           }
         }
       },
