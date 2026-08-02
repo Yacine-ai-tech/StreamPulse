@@ -1,3 +1,4 @@
+import os
 """WebhookReceiver HMAC verification tests (pure, offline)."""
 import hashlib
 import hmac
@@ -19,10 +20,10 @@ def test_valid_signature_passes():
 
 
 def test_tampered_payload_fails():
-    secret = 'REDACTED'
+    secret = os.getenv('WEBHOOK_SECRET', 'CHANGE_ME')
     sig = _sign(b'{"value":100}', secret)
     assert not WebhookReceiver.verify_signature(b'{"value":999}', sig, secret=secret)
 
 
 def test_missing_signature_fails():
-    assert not WebhookReceiver.verify_signature(b"x", "", secret = 'REDACTED')
+    assert not WebhookReceiver.verify_signature(b"x", "", secret = os.getenv('WEBHOOK_SECRET', 'CHANGE_ME'))
