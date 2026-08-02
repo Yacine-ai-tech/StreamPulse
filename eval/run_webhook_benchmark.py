@@ -1,3 +1,4 @@
+import os
 import asyncio
 import time
 import httpx
@@ -16,7 +17,7 @@ async def benchmark_webhooks(n=100, concurrency=10):
     print(f"Starting StreamPulse Webhook Benchmark (N={n}, Concurrency={concurrency})")
     
     payloads = []
-    secret = "topsecret_webhook_key"
+    secret = os.getenv("WEBHOOK_SECRET", "CHANGE_ME")
     for i in range(n):
         # generate a mix of good and bad signatures
         body = f'{{"id": {i}, "event": "issue_comment", "action": "created", "comment": {{"body": "This is a test comment {i}"}}}}'.encode()
