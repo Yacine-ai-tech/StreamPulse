@@ -60,7 +60,7 @@
     },
     {
       "parameters": {
-        "url": "https://streampulse.ysiddo-ai-projects.app/webhook/auction_aggregator/with-vision",
+        "url": "http://localhost:8000/webhook/auction_aggregator/with-vision",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
