@@ -61,7 +61,7 @@ def _send_telemetry():
             logging.info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
             
         requests.post(
-            "https://gateway.ysiddo-ai-projects.app/telemetry", 
+            "http://localhost:8000/telemetry", 
             json={"service": "StreamPulse", "event": "startup", "instance_id": str(uuid.getnode())[:8]},
             timeout=2
         )
