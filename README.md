@@ -68,7 +68,7 @@ uvicorn api:app --port 8004
 ```bash
 # In n8n: Workflows → Import from File
 ls connectors/n8n/workflows/
-# auction_aggregator.json  invoice_intake.json  crm_sync.json
+# auction_aggregator_demo.json  csv_batch_ingest_demo.json  http_api_sync_demo.json
 ```
 
 ## Tests

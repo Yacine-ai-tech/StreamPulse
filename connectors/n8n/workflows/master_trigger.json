@@ -40,7 +40,7 @@
     {
       "parameters": {
         "method": "GET",
-        "url": "https://gateway.ysiddo-ai-projects.app/streampulse/health",
+        "url": "http://localhost:8000/streampulse/health",
         "options": {}
       },
       "name": "Verify StreamPulse Health",

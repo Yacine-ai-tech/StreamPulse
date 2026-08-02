@@ -107,6 +107,7 @@ def _conn():
     else:
         c = sqlite3.connect(_DB_PATH)
         c.row_factory = sqlite3.Row
+        c.executescript(_SCHEMA_SQLITE)
         try:
             with c:
                 yield c
