@@ -11,6 +11,8 @@ services:
     plan: free
     autoDeploy: false
     envVars:
+      - key: ENVIRONMENT
+        value: production
       - key: GROQ_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
