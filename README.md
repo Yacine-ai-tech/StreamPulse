@@ -1,24 +1,23 @@
-# StreamPulse
+# StreamPulse: Real-Time Data Pipeline and Domain Auto-Classification
 
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
+[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml)
 
+**StreamPulse** is a research-grade, real-time business data pipeline featuring a 3-tier hybrid domain auto-classifier. It is designed to integrate seamlessly with n8n and Prefect 3, supporting multiple data sources and live observability.
 
-[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-
-**Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
 > 🔗 **Live API:** https://streampulse.ysiddo-ai-projects.app/health  ·  live stream at `/live/sse`.
 > On-demand backend (first request ~30–60 s to wake).
 > Self-hosting: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## What It Does
 
-- **6 source types**: JSON, CSV, Gmail email, webhooks (HMAC-verified), Google Sheets, custom n8n
-- **6-domain classifier**: keyword fast-path → embedding fallback → Claude Haiku zero-shot
-- **`/webhook/{source}/with-vision`**: composes with DocIntel `/classify-image` for auction/inventory aggregation
-- **Live dashboard** via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
-- **n8n custom node + 3 importable workflows** in `connectors/n8n/`
-- **Prefect 3 flow** for retried, scheduled execution in `orchestration/prefect_flow.py`
-- **dlt declarative sources** for Gmail / Sheets / webhook in `ingestion/dlt_sources.py`
+- **Multi-Source Ingestion**: JSON, CSV, Gmail email, webhooks (HMAC-verified), Google Sheets, custom n8n
+- **3-Tier Domain Classifier**: Keyword Fast-Path → Vector Embedding Fallback → LLM Zero-Shot Escalation
+- **Vision Integration (`/webhook/{source}/with-vision`)**: Composes with DocIntel `/classify-image` for multi-modal context aggregation
+- **Real-Time Observability**: Live dashboard via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
+- **n8n Orchestration**: Custom node + 3 importable workflows in `connectors/n8n/`
+- **Prefect 3 Integration**: Flow for retried, scheduled execution in `orchestration/prefect_flow.py`
+- **dlt Declarative Sources**: Native support for Gmail, Sheets, and webhook in `ingestion/dlt_sources.py`
 
 ## Quick Start
 
@@ -74,10 +73,6 @@ uvicorn api:app --port 8004
 ls connectors/n8n/workflows/
 # auction_aggregator.json  invoice_intake.json  crm_sync.json
 ```
-
-## License
-
-MIT
 
 ## ⚖️ License & Enterprise Use (Dual-License)
 

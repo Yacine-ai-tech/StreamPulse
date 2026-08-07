@@ -499,15 +499,24 @@ async def get_realtime_pipeline() -> RealtimePipeline:
     return _pipeline
 
 
+import hashlib
+_classification_cache = {}
+
 def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     """Hybrid domain classifier: fast keyword pass, vector embedding fallback, and LLM escalation.
     Tier 1: Fast Keyword matching
     Tier 2: Vector embedding similarity vs domain prototypes (BAAI/bge-large-en-v1.5)
     Tier 3: Zero-shot classification via Claude Haiku 4.5
     """
+    content_hash = hashlib.md5((content or "").encode()).hexdigest()
+    if content_hash in _classification_cache:
+        return _classification_cache[content_hash]
+
     domain, conf = DomainClassifier.classify(content or "")
-    if fast_only or conf >= 0.5:
-        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    if fast_only or conf >= 0.7:
+        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+        _classification_cache[content_hash] = result
+        return result
         
     # Tier 2: Vector Embedding Fallback
     hf_token = os.getenv("HF_TOKEN", "").strip()
@@ -557,13 +566,17 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                             best_score = score
                             best_domain = domains[idx]
                             
-                if best_score >= 0.5:
-                    return {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
+                if best_score >= 0.75:
+                    result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
+                    _classification_cache[content_hash] = result
+                    return result
         except Exception as e:
             log.warning("Embedding classification failed: %s", e)
 
     if os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
-        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
+        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
+        _classification_cache[content_hash] = result
+        return result
 
     # Tier 3: Zero-shot classification via LLM (Claude Haiku or Gemini)
     try:
@@ -583,11 +596,15 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         )
         label = (resp.choices[0].message.content or "").strip()
         if label in labels:
-            return {"domain": label, "confidence": 0.7, "method": "llm"}
+            result = {"domain": label, "confidence": 0.7, "method": "llm"}
+            _classification_cache[content_hash] = result
+            return result
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
         
-    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    _classification_cache[content_hash] = result
+    return result
 
 
 
