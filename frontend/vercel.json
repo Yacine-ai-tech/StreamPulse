@@ -1,6 +1,18 @@
 {
   "rewrites": [
     {
+      "source": "/docs",
+      "destination": "https://gateway.ysiddo-ai-projects.app/streampulse/docs"
+    },
+    {
+      "source": "/docs/(.*)",
+      "destination": "https://gateway.ysiddo-ai-projects.app/streampulse/docs/$1"
+    },
+    {
+      "source": "/openapi.json",
+      "destination": "https://gateway.ysiddo-ai-projects.app/streampulse/openapi.json"
+    },
+    {
       "source": "/(.*)",
       "destination": "/index.html"
     }
