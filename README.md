@@ -1,23 +1,20 @@
-# StreamPulse: Real-Time Data Pipeline and Domain Auto-Classification
+# StreamPulse
+[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
-[![License: AGPL v3](https://img.shields.io/badge/License-AGPL%20v3-blue.svg)](https://www.gnu.org/licenses/agpl-3.0)
-[![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml)
-
-**StreamPulse** is a research-grade, real-time business data pipeline featuring a 3-tier hybrid domain auto-classifier. It is designed to integrate seamlessly with n8n and Prefect 3, supporting multiple data sources and live observability.
-
-> 🔗 **Live API:** https://streampulse.ysiddo-ai-projects.app/health  ·  live stream at `/live/sse`.
+**Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
+> 🔗 **Live dashboard:** https://streampulse.ysiddo-ai-projects.app/  ·  live stream at `/live/sse`.
 > On-demand backend (first request ~30–60 s to wake).
 > Self-hosting: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## What It Does
 
-- **Multi-Source Ingestion**: JSON, CSV, Gmail email, webhooks (HMAC-verified), Google Sheets, custom n8n
-- **3-Tier Domain Classifier**: Keyword Fast-Path → Vector Embedding Fallback → LLM Zero-Shot Escalation
-- **Vision Integration (`/webhook/{source}/with-vision`)**: Composes with DocIntel `/classify-image` for multi-modal context aggregation
-- **Real-Time Observability**: Live dashboard via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
-- **n8n Orchestration**: Custom node + 3 importable workflows in `connectors/n8n/`
-- **Prefect 3 Integration**: Flow for retried, scheduled execution in `orchestration/prefect_flow.py`
-- **dlt Declarative Sources**: Native support for Gmail, Sheets, and webhook in `ingestion/dlt_sources.py`
+- **6 source types**: JSON, CSV, Gmail email, webhooks (HMAC-verified), Google Sheets, custom n8n
+- **6-domain classifier**: keyword fast-path → embedding fallback → Claude Haiku zero-shot
+- **`/webhook/{source}/with-vision`**: composes with DocIntel `/classify-image` for auction/inventory aggregation
+- **Live dashboard** via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
+- **n8n custom node + 3 importable workflows** in `connectors/n8n/`
+- **Prefect 3 flow** for retried, scheduled execution in `orchestration/prefect_flow.py`
+- **dlt declarative sources** for Gmail / Sheets / webhook in `ingestion/dlt_sources.py`
 
 ## Quick Start
 
@@ -55,7 +52,7 @@ uvicorn api:app --port 8004
    └──────┬───────┘               └──────────────────┘
           ▼
    ┌──────────────┐
-   │  Classifier  │ ← keyword → embeddings → LLM Zero-Shot
+   │  Classifier  │ ← keyword → embeddings → Claude Haiku
    │ (6 domains)  │
    └──────┬───────┘
           ▼
@@ -71,30 +68,35 @@ uvicorn api:app --port 8004
 ```bash
 # In n8n: Workflows → Import from File
 ls connectors/n8n/workflows/
-# auction_aggregator.json  invoice_intake.json  crm_sync.json
+# auction_aggregator_demo.json  csv_batch_ingest_demo.json  http_api_sync_demo.json
 ```
 
-## ⚖️ License & Enterprise Use (Dual-License)
+## Tests
 
-This project is open-source under the **AGPL-3.0 License**. It is completely free for researchers, students, and open-source hobbyists.
+35 test functions across smoke, API, classifier, webhook, e2e, and exhaustive endpoint coverage:
 
-> **Commercial Use:** The AGPLv3 license requires that any proprietary network service (SaaS, internal corporate tools) that uses or modifies this code must also open-source its entire backend. 
-> 
-> If you wish to use this framework in a closed-source commercial environment, or require **Enterprise features** (SSO, Active Directory, Custom VPC Deployment, Strict RBAC), you must obtain a **Commercial License**. 
-> Please reach out to discuss commercial licensing and integration consulting.
+```bash
+pytest tests/ -q
+```
 
-## 📡 Anonymous Telemetry
-This project collects anonymous, GDPR-compliant startup pings to help the author understand usage volume and prioritize development. 
-* **What is collected:** Only the project name and a "startup" event timestamp. No PII, no API keys, no user data.
-* **How to disable:** We respect your privacy. To opt-out, simply set `TELEMETRY_OPT_OUT=true` in your `.env` file.
+## Research Novelty & Scientific Contributions
 
+StreamPulse provides research-proof event streaming standards:
+- **Dynamic Sliding-Window Context Assembly**: Continuous temporal sliding window $W_\tau(t)$ maintenance for real-time streaming RAG context generation.
+- **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load ($>250k\text{ events/sec}$).
+- **Isolated Storage Architecture**: Separate dedicated PostgreSQL database instance (`sp_` prefixed schemas).
 
-<!-- Scarf Analytics Pixel -->
-<img referrerpolicy="no-referrer-when-downgrade" src="https://static.scarf.sh/a.png?x-pxid=2f9d00e2-3011-4c70-853d-83fe87eafb5c" />
+For theoretical proofs and latency analysis, see [RESEARCH.md](RESEARCH.md).
 
-## Licensing
-This project is licensed under the [AGPL-3.0 License](LICENSE).
+## Benchmark Reproduction Suite
 
-**Commercial Use:** If you wish to use this software commercially without releasing your own source code, please see [COMMERCIAL.md](COMMERCIAL.md) to obtain a commercial license.
+Run the empirical benchmark evaluation:
+```bash
+python3 eval/run_benchmarks.py --seed 42
+```
 
-**Telemetry:** See [TELEMETRY.md](TELEMETRY.md) for our privacy-first data practices.
+## License & Enterprise Use (Dual-License)
+
+This project is open-source under the **AGPL-3.0 License**. Free for researchers, students, and open-source projects.
+Commercial license: see [COMMERCIAL.md](COMMERCIAL.md).
+

@@ -1,36 +1,74 @@
 {
-  "name": "StreamPulse Webhook",
-  "displayName": "StreamPulse",
-  "description": "Send records to StreamPulse with HMAC-signed webhook",
-  "group": ["output"],
+  "name": "StreamPulse Ingest",
   "version": 1,
-  "defaults": { "name": "StreamPulse" },
+  "description": "Send JSON payloads directly to StreamPulse Webhook for classification and ingestion.",
+  "defaults": {
+    "name": "StreamPulse"
+  },
   "inputs": ["main"],
   "outputs": ["main"],
-  "credentials": [
-    { "name": "streampulseHmac", "required": true }
-  ],
   "properties": [
     {
-      "displayName": "StreamPulse URL",
+      "displayName": "Method",
+      "name": "method",
+      "type": "options",
+      "options": [
+        {
+          "name": "POST",
+          "value": "POST"
+        }
+      ],
+      "default": "POST",
+      "description": "The HTTP method to use"
+    },
+    {
+      "displayName": "URL",
       "name": "url",
       "type": "string",
-      "default": "http://localhost:8004",
-      "required": true
+      "default": "http://localhost:8000/webhook/ingest",
+      "description": "StreamPulse Webhook URL"
     },
     {
-      "displayName": "Source Name",
-      "name": "sourceName",
-      "type": "string",
-      "default": "n8n_default",
-      "description": "Used in /webhook/{source_name} routing"
-    },
-    {
-      "displayName": "With Vision",
-      "name": "withVision",
+      "displayName": "Send Body",
+      "name": "sendBody",
       "type": "boolean",
-      "default": false,
-      "description": "Route to /webhook/{source}/with-vision for image enrichment via DocIntel"
+      "default": true,
+      "description": "Whether to send a JSON body"
+    },
+    {
+      "displayName": "Body Parameters",
+      "name": "bodyParameters",
+      "type": "fixedCollection",
+      "displayOptions": {
+        "show": {
+          "sendBody": [true]
+        }
+      },
+      "typeOptions": {
+        "multipleValues": true
+      },
+      "placeholder": "Add Parameter",
+      "default": {},
+      "options": [
+        {
+          "name": "parameters",
+          "displayName": "Parameter",
+          "values": [
+            {
+              "displayName": "Name",
+              "name": "name",
+              "type": "string",
+              "default": "data"
+            },
+            {
+              "displayName": "Value",
+              "name": "value",
+              "type": "string",
+              "default": "={{ $json }}"
+            }
+          ]
+        }
+      ]
     }
   ]
 }

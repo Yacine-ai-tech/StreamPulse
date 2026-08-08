@@ -32,11 +32,11 @@ if _PG_URL:
     except ImportError:
         log.warning("POSTGRES_URL set but psycopg not installed — falling back to SQLite")
 
-_T_KPI = "sp_kpi_metrics" if _PG else "kpi_metrics"
-_T_LOG = "sp_ingestion_log" if _PG else "ingestion_log"
+_T_KPI = "sp_kpi_metrics"
+_T_LOG = "sp_ingestion_log"
 
 _SCHEMA_SQLITE = """
-CREATE TABLE IF NOT EXISTS kpi_metrics (
+CREATE TABLE IF NOT EXISTS sp_kpi_metrics (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     period TEXT NOT NULL,
     category TEXT NOT NULL,
@@ -47,10 +47,10 @@ CREATE TABLE IF NOT EXISTS kpi_metrics (
     confidence REAL,
     created_at TEXT NOT NULL
 );
-CREATE INDEX IF NOT EXISTS idx_kpi_cat ON kpi_metrics(category);
-CREATE INDEX IF NOT EXISTS idx_kpi_period ON kpi_metrics(period);
+CREATE INDEX IF NOT EXISTS idx_sp_kpi_cat ON sp_kpi_metrics(category);
+CREATE INDEX IF NOT EXISTS idx_sp_kpi_period ON sp_kpi_metrics(period);
 
-CREATE TABLE IF NOT EXISTS ingestion_log (
+CREATE TABLE IF NOT EXISTS sp_ingestion_log (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     source TEXT NOT NULL,
     status TEXT NOT NULL,
@@ -89,16 +89,40 @@ CREATE TABLE IF NOT EXISTS sp_ingestion_log (
 );
 """
 
+from contextlib import contextmanager
+
 _DB_PATH = Path("streampulse.db")
 _initialized = False
 
 
+@contextmanager
 def _conn():
     if _PG:
-        return psycopg.connect(_PG_URL, row_factory=dict_row)
-    c = sqlite3.connect(_DB_PATH)
-    c.row_factory = sqlite3.Row
-    return c
+        conn = psycopg.connect(_PG_URL, row_factory=dict_row)
+        try:
+            with conn:
+                yield conn
+        finally:
+            conn.close()
+    else:
+        c = sqlite3.connect(_DB_PATH)
+        c.row_factory = sqlite3.Row
+        c.executescript(_SCHEMA_SQLITE)
+        try:
+            with c:
+                yield c
+        finally:
+            c.close()
+
+
+def _clean_row(r: Any) -> Dict[str, Any]:
+    if not r:
+        return {}
+    d = dict(r)
+    for k, v in d.items():
+        if isinstance(v, datetime):
+            d[k] = v.isoformat()
+    return d
 
 
 def _q(sql: str) -> str:
@@ -129,18 +153,48 @@ def store_kpi_metrics(records: List[Dict[str, Any]]) -> int:
     with _conn() as c:
         for r in records:
             try:
-                c.execute(
-                    _q(f"""
-                    INSERT INTO {_T_KPI}
-                      (period, category, metric, value, unit, source, confidence, created_at)
-                    VALUES (?,?,?,?,?,?,?,?)
-                    """),
-                    (
-                        r.get("period", ""), r.get("category", ""), r.get("metric", ""),
-                        float(r.get("value", 0) or 0), r.get("unit"), r.get("source"),
-                        float(r.get("confidence", 1.0) or 1.0), now,
-                    ),
+                val = r.get("value")
+                try:
+                    num_val = float(val) if val is not None else 0.0
+                except (ValueError, TypeError):
+                    num_val = 0.0
+
+                conf = r.get("confidence")
+                try:
+                    num_conf = float(conf) if conf is not None else 1.0
+                except (ValueError, TypeError):
+                    num_conf = 1.0
+
+                params = (
+                    str(r.get("period") or "N/A"),
+                    str(r.get("category") or "General"),
+                    str(r.get("metric") or "metric"),
+                    num_val,
+                    str(r.get("unit")) if r.get("unit") is not None else None,
+                    str(r.get("source")) if r.get("source") is not None else None,
+                    num_conf,
+                    now,
                 )
+
+                if _PG:
+                    with c.transaction():
+                        c.execute(
+                            _q(f"""
+                            INSERT INTO {_T_KPI}
+                              (period, category, metric, value, unit, source, confidence, created_at)
+                            VALUES (?,?,?,?,?,?,?,?)
+                            """),
+                            params,
+                        )
+                else:
+                    c.execute(
+                        _q(f"""
+                        INSERT INTO {_T_KPI}
+                          (period, category, metric, value, unit, source, confidence, created_at)
+                        VALUES (?,?,?,?,?,?,?,?)
+                        """),
+                        params,
+                    )
                 count += 1
             except Exception as e:
                 log.warning("skip record %s: %s", r.get("metric"), e)
@@ -166,7 +220,7 @@ def get_kpi_metrics(
     sql += " ORDER BY id DESC LIMIT ?"; params.append(limit)
     with _conn() as c:
         rows = c.execute(_q(sql), params).fetchall()
-    return [dict(r) for r in rows]
+    return [_clean_row(r) for r in rows]
 
 
 def log_data_ingestion(source: str, status: str, records: int = 0,
@@ -203,14 +257,14 @@ def get_pipeline_history(limit: int = 100) -> List[Dict[str, Any]]:
     init_db()
     with _conn() as c:
         rows = c.execute(_q(f"SELECT * FROM {_T_LOG} ORDER BY id DESC LIMIT ?"), (limit,)).fetchall()
-    return [dict(r) for r in rows]
+    return [_clean_row(r) for r in rows]
 
 
 def get_ingestion_row(log_id: int) -> Optional[Dict[str, Any]]:
     init_db()
     with _conn() as c:
         row = c.execute(_q(f"SELECT * FROM {_T_LOG} WHERE id = ?"), (log_id,)).fetchone()
-    return dict(row) if row else None
+    return _clean_row(row) if row else None
 
 
 def store_stats() -> Dict[str, Any]:
