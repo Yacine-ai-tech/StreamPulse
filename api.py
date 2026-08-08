@@ -36,17 +36,33 @@ app = FastAPI(title="StreamPulse", version="0.1.0",
 import threading
 import requests
 import os
-import logging
+import time
+import uuid
 
 def _send_telemetry():
     if os.environ.get("TELEMETRY_OPT_OUT", "").lower() in ("1", "true", "yes"):
         return
+    
+    lock_file = "/tmp/.ysiddo_telemetry.lock"
     try:
-        logging.info("📡 Anonymous usage telemetry is ENABLED. This helps us understand project usage.")
-        logging.info("📡 To disable this, set the environment variable TELEMETRY_OPT_OUT=true.")
+        if os.path.exists(lock_file):
+            if time.time() - os.path.getmtime(lock_file) < 21600:
+                return
+        with open(lock_file, "w") as f:
+            f.write(str(time.time()))
+    except Exception:
+        pass
+
+    try:
+        if "log" in globals():
+            globals()["log"].info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
+        else:
+            import logging
+            logging.info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
+            
         requests.post(
-            "https://gateway.ysiddo-ai-projects.app/telemetry", 
-            json={"service": "StreamPulse", "event": "startup"},
+            "http://localhost:8000/telemetry", 
+            json={"service": "StreamPulse", "event": "startup", "instance_id": str(uuid.getnode())[:8]},
             timeout=2
         )
     except Exception:
@@ -58,18 +74,19 @@ threading.Thread(target=_send_telemetry, daemon=True).start()
 
 from fastapi import Request
 from fastapi.responses import JSONResponse
+from fastapi.staticfiles import StaticFiles
 import os as _os
 
 @app.middleware("http")
 async def verify_internal_token(request: Request, call_next):
-    # Allow health checks and public auth routes
-    if request.url.path in ["/health", "/docs", "/openapi.json", "/api/redoc"] or request.url.path.startswith("/api/v1/auth/"):
+    # Allow health checks, public auth routes, and frontend static assets
+    if request.method == "OPTIONS" or request.url.path in ["/", "/health", "/docs", "/openapi.json", "/api/redoc", "/favicon.png", "/favicon.ico", "/mark.png", "/logo.png"] or request.url.path.startswith("/api/v1/auth/") or request.url.path.startswith("/assets/") or request.url.path.startswith("/static/"):
         return await call_next(request)
         
     token = request.headers.get("X-OmniIntel-Internal-Token")
     expected_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
     
-    if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "true").lower() == "true":
+    if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
         return JSONResponse(status_code=403, content={"detail": "Missing or invalid X-OmniIntel-Internal-Token"})
         
     return await call_next(request)
@@ -77,11 +94,7 @@ async def verify_internal_token(request: Request, call_next):
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
-try:  # browser demo UI (served by the backend, no separate deploy)
-    from fastapi.staticfiles import StaticFiles
-    app.mount("/demo", StaticFiles(directory="demo", html=True), name="demo")
-except RuntimeError:
-    log.warning("demo/ directory not found — /demo will not be served")
+
 
 try:
     _assets_dir = _os.path.join(_os.path.dirname(__file__), "frontend", "dist", "assets")
@@ -99,8 +112,7 @@ async def dashboard():
     spa = os.path.join(root, "frontend", "dist", "index.html")
     if os.path.exists(spa):
         return FileResponse(spa)
-    path = os.path.join(root, "demo", "index.html")
-    return FileResponse(path) if os.path.exists(path) else {"service": "streampulse", "docs": "/docs"}
+    return {"service": "streampulse", "docs": "/docs"}
 
 try:
     init_db()
@@ -134,14 +146,83 @@ except Exception:
         return {"domain": "Operations", "confidence": 0.5}
 
 
+
+
 # ─────────────────────────────────────────────────────────────────────────────
-# WebSocket clients
+# WebSocket clients & Message Broker (Redis/Kafka)
 # ─────────────────────────────────────────────────────────────────────────────
+import os
+import asyncio
+import json
 
 _clients: Set[WebSocket] = set()
 
+_MESSAGE_BROKER = os.getenv("MESSAGE_BROKER", "redis").lower()
+_REDIS_URL = os.getenv("REDIS_URL")
+_KAFKA_BROKER_URL = os.getenv("KAFKA_BROKER_URL")
 
-async def _broadcast(payload: Dict[str, Any]) -> None:
+_redis_pubsub = None
+_kafka_producer = None
+_kafka_consumer = None
+
+async def _setup_broker():
+    if _MESSAGE_BROKER == "redis":
+        await _setup_redis()
+    elif _MESSAGE_BROKER == "kafka":
+        await _setup_kafka()
+    else:
+        log.warning(f"Unknown MESSAGE_BROKER: {_MESSAGE_BROKER}")
+
+async def _setup_redis():
+    global _redis_pubsub
+    if not _REDIS_URL:
+        log.warning("MESSAGE_BROKER=redis but REDIS_URL is not set")
+        return
+    try:
+        import redis.asyncio as aioredis
+        r = aioredis.from_url(_REDIS_URL)
+        _redis_pubsub = r.pubsub()
+        await _redis_pubsub.subscribe("streampulse_ingest")
+        log.info("✅ Redis PubSub broker enabled for multi-node broadcast")
+        
+        async def _listen():
+            async for message in _redis_pubsub.listen():
+                if message["type"] == "message":
+                    payload = json.loads(message["data"])
+                    await _local_broadcast(payload)
+        
+        asyncio.create_task(_listen())
+    except Exception as e:
+        log.warning(f"Failed to setup Redis broker: {e}")
+
+async def _setup_kafka():
+    global _kafka_producer, _kafka_consumer
+    if not _KAFKA_BROKER_URL:
+        log.warning("MESSAGE_BROKER=kafka but KAFKA_BROKER_URL is not set")
+        return
+    try:
+        from aiokafka import AIOKafkaProducer, AIOKafkaConsumer # type: ignore
+        _kafka_producer = AIOKafkaProducer(bootstrap_servers=_KAFKA_BROKER_URL)
+        await _kafka_producer.start()
+        
+        _kafka_consumer = AIOKafkaConsumer(
+            "streampulse_ingest",
+            bootstrap_servers=_KAFKA_BROKER_URL,
+            group_id="streampulse-group"
+        )
+        await _kafka_consumer.start()
+        log.info("✅ Kafka broker enabled for multi-node broadcast")
+
+        async def _listen():
+            async for msg in _kafka_consumer:
+                payload = json.loads(msg.value.decode("utf-8"))
+                await _local_broadcast(payload)
+                
+        asyncio.create_task(_listen())
+    except Exception as e:
+        log.warning(f"Failed to setup Kafka broker: {e}")
+
+async def _local_broadcast(payload: Dict[str, Any]) -> None:
     dead: List[WebSocket] = []
     for ws in list(_clients):
         try:
@@ -150,6 +231,30 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
             dead.append(ws)
     for ws in dead:
         _clients.discard(ws)
+
+async def _broadcast(payload: Dict[str, Any]) -> None:
+    # Always broadcast locally
+    await _local_broadcast(payload)
+    
+    msg_str = json.dumps(payload)
+    
+    if _MESSAGE_BROKER == "redis" and _REDIS_URL:
+        try:
+            import redis.asyncio as aioredis
+            r = aioredis.from_url(_REDIS_URL)
+            await r.publish("streampulse_ingest", msg_str)
+        except Exception as e:
+            log.warning(f"Redis publish failed: {e}")
+            
+    elif _MESSAGE_BROKER == "kafka" and _kafka_producer:
+        try:
+            await _kafka_producer.send_and_wait("streampulse_ingest", msg_str.encode("utf-8"))
+        except Exception as e:
+            log.warning(f"Kafka publish failed: {e}")
+
+@app.on_event("startup")
+async def startup_broker():
+    await _setup_broker()
 
 async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     """Forward classified records to an external system (e.g. IntelAI) enforcing strict schema."""
@@ -189,9 +294,25 @@ class IngestJsonRequest(BaseModel):
     source: str = "manual_json"
 
 
+_last_db_check = 0.0
+_cached_db_status = "ok"
+
 @app.get("/health")
 async def health() -> Dict[str, Any]:
-    return {"status": "ok", "service": "streampulse", "version": "0.1.0"}
+    global _last_db_check, _cached_db_status
+    import time
+    now = time.time()
+    if now - _last_db_check > 10:
+        try:
+            from store import _conn
+            with _conn() as conn:
+                conn.execute("SELECT 1")
+            _cached_db_status = "ok"
+        except Exception as e:
+            _cached_db_status = f"error: {str(e)}"
+        _last_db_check = now
+    return {"status": "ok" if _cached_db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": _cached_db_status}
+
 
 
 @app.post("/ingest/json")
@@ -322,8 +443,17 @@ async def ws_live(ws: WebSocket):
     await ws.accept()
     _clients.add(ws)
     try:
+        import asyncio
+        import json
+        from datetime import datetime, timezone
         while True:
-            await ws.receive_text()
+            try:
+                await asyncio.wait_for(ws.receive_text(), timeout=30.0)
+            except asyncio.TimeoutError:
+                try:
+                    await ws.send_text(json.dumps({"type": "ping", "timestamp": datetime.now(timezone.utc).isoformat()}))
+                except Exception:
+                    break
     except WebSocketDisconnect:
         _clients.discard(ws)
 

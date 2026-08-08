@@ -1,7 +1,6 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import * as Recharts from "recharts";
-const { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } = Recharts;
+import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { ArrowRight, Pause, Play, Radio, Send } from "lucide-react";
 import { Link } from "react-router-dom";
 import { PageHeader } from "../kit/AppShell";
