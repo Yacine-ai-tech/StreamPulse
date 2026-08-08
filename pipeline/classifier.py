@@ -499,33 +499,25 @@ async def get_realtime_pipeline() -> RealtimePipeline:
     return _pipeline
 
 
-import hashlib
-_classification_cache = {}
-
 def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     """Hybrid domain classifier: fast keyword pass, vector embedding fallback, and LLM escalation.
     Tier 1: Fast Keyword matching
     Tier 2: Vector embedding similarity vs domain prototypes (BAAI/bge-large-en-v1.5)
     Tier 3: Zero-shot classification via Claude Haiku 4.5
     """
-    content_hash = hashlib.md5((content or "").encode()).hexdigest()
-    if content_hash in _classification_cache:
-        return _classification_cache[content_hash]
-
     domain, conf = DomainClassifier.classify(content or "")
-    if fast_only or conf >= 0.7:
-        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
-        _classification_cache[content_hash] = result
-        return result
+    if fast_only or conf >= 0.5:
+        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
         
-    # Tier 2: Vector Embedding Fallback
-    hf_token = os.getenv("HF_TOKEN", "").strip()
-    if hf_token and os.getenv("STREAMPULSE_HYBRID_LLM") == "1":
+    if os.getenv("STREAMPULSE_HYBRID_LLM") == "1":
         try:
-            import urllib.request, json as _json
-            url = "https://router.huggingface.co/hf-inference/models/BAAI/bge-large-en-v1.5"
-            h = {"Authorization": f"Bearer {hf_token}", "Content-Type": "application/json"}
-            
+            # Use the inference adapter for BGE embeddings (supports Orchestrator/Cohere/Jina)
+            import sys, os as _os
+            _svc_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "services")
+            if _svc_dir not in sys.path:
+                sys.path.insert(0, _svc_dir)
+            from inference_adapter import embed as _embed  # type: ignore
+
             domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
             prototypes = [
                 "finance revenue profit margin cash flow ebitda",
@@ -533,31 +525,23 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 "hr people employee turnover hiring retention",
                 "esg sustainability carbon diversity governance",
                 "it uptime latency incident deployment devops",
-                "general company update news announcement"
+                "general company update news announcement",
             ]
-            
-            # Embed the content and prototypes
             inputs = [content[:500]] + prototypes
-            body = _json.dumps({"inputs": inputs}).encode()
-            req = urllib.request.Request(url, data=body, headers=h)
-            res = urllib.request.urlopen(req, timeout=10)
-            embeddings = _json.loads(res.read())
-            
+            embeddings = _embed(inputs, model=os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-large-en-v1.5"))
             if embeddings and len(embeddings) == len(inputs):
-                # Calculate cosine similarity manually to avoid numpy dependency in this microservice
                 content_emb = embeddings[0]
                 proto_embs = embeddings[1:]
-                
                 best_score = -1.0
                 best_domain = "General"
-                
+
                 def dot_product(v1, v2):
                     return sum(x * y for x, y in zip(v1, v2))
+
                 def magnitude(v):
                     return sum(x * x for x in v) ** 0.5
-                    
+
                 c_mag = magnitude(content_emb)
-                
                 for idx, p_emb in enumerate(proto_embs):
                     p_mag = magnitude(p_emb)
                     if c_mag > 0 and p_mag > 0:
@@ -565,18 +549,13 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                         if score > best_score:
                             best_score = score
                             best_domain = domains[idx]
-                            
-                if best_score >= 0.75:
-                    result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
-                    _classification_cache[content_hash] = result
-                    return result
+                if best_score >= 0.5:
+                    return {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
         except Exception as e:
             log.warning("Embedding classification failed: %s", e)
 
     if os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
-        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
-        _classification_cache[content_hash] = result
-        return result
+        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
 
     # Tier 3: Zero-shot classification via LLM (Claude Haiku or Gemini)
     try:
@@ -585,7 +564,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         # Use GEMINI as fallback if OpenAI/Anthropic are unavailable, as requested by user
         model = settings.LLM_JUDGE
         if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
-            model = "gemini/gemini-1.5-flash"
+            model = "gemini/gemini-2.5-flash"
             
         resp = completion(
             model=model,
@@ -596,15 +575,11 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         )
         label = (resp.choices[0].message.content or "").strip()
         if label in labels:
-            result = {"domain": label, "confidence": 0.7, "method": "llm"}
-            _classification_cache[content_hash] = result
-            return result
+            return {"domain": label, "confidence": 0.7, "method": "llm"}
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
         
-    result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
-    _classification_cache[content_hash] = result
-    return result
+    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
 
 
 

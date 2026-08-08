@@ -1,3 +1,5 @@
+export class ApiError extends Error { constructor(public status: number, message: string) { super(message); this.name = 'ApiError'; } }
+
 /** Typed client for the StreamPulse API (shapes verified in GAP_REPORT.md §1). */
 
 export type ClassifiedRecord = Record<string, unknown> & {
@@ -111,7 +113,7 @@ export function openLive(
   const startSSE = () => {
     if (closed) return;
     onState("connecting");
-    es = new EventSource("/live/sse");
+    es = new EventSource(BASE ? `${BASE}/live/sse` : "/live/sse");
     es.onopen = () => onState("sse");
     es.onerror = () => { es?.close(); onState("down"); };
     // SSE payload is recent history, not per-ingest events — used as a fallback signal only.
@@ -120,8 +122,10 @@ export function openLive(
   const startWS = () => {
     if (closed) return;
     onState("connecting");
-    const proto = location.protocol === "https:" ? "wss" : "ws";
-    ws = new WebSocket(`${proto}://${location.host}/live`);
+    const wsUrl = BASE
+      ? BASE.replace(/^http/, "ws").replace(/\/$/, "") + "/live"
+      : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/live`;
+    ws = new WebSocket(wsUrl);
     ws.onopen = () => {
       onState("ws");
       keepalive = window.setInterval(() => ws?.readyState === 1 && ws.send("ping"), 25000);
