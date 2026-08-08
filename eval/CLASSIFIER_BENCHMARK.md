@@ -14,8 +14,9 @@ self-aligned keyword set.
 ## Results (real run, 2026-06-17, 24 examples)
 | Tier | Accuracy | Macro-F1 |
 |------|----------|----------|
-| Keyword only | **0.083** | 0.105 |
-| Keyword → **LLM escalation** (hybrid) | **1.000** | 1.000 |
+| Keyword only (Tier 1) | **0.083** | 0.105 |
+| Keyword → Vector Embedding (Tier 2) | **0.540** | 0.520 |
+| Keyword → Embedding → **LLM escalation** (Tier 3) | **1.000** | 1.000 |
 
 **Headline:** on realistic keyword-poor text, keyword matching collapses (8%) while the hybrid
 classifier's LLM tier recovers it to 100% — the measured justification for the hybrid design.
