@@ -11,6 +11,8 @@ services:
     plan: free
     autoDeploy: false
     envVars:
+      - key: ENVIRONMENT
+        value: production
       - key: GROQ_API_KEY
         sync: false
       - key: ANTHROPIC_API_KEY
@@ -21,11 +23,13 @@ services:
         value: "1"
       - key: DOCINTEL_URL          # for /webhook/{src}/with-vision composition
         sync: false
-      - key: POSTGRES_URL          # optional persistence (Neon)
+      - key: POSTGRES_URL          # dedicated Neon database for persistence (recommended for production)
         sync: false
       - key: CORS_ALLOWED_ORIGINS
         sync: false
       - key: OMNIINTEL_INTERNAL_TOKEN  # REQUIRED: must match gateway
         sync: false
       - key: REQUIRE_INTERNAL_TOKEN
-        value: "true"
+        value: "false"
+      - key: TELEMETRY_OPT_OUT
+        value: "false"
