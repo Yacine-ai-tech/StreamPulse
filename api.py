@@ -316,14 +316,20 @@ async def health() -> Dict[str, Any]:
 
 
 @app.post("/ingest/json")
-async def ingest_json(req: IngestJsonRequest) -> Dict[str, Any]:
+async def ingest_json(
+    req: IngestJsonRequest,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    """x_demo_session_id: the visitor's browser id (if any). None for genuine external
+    webhooks/n8n/CRM sources, whose data stays visible to everyone by design — see
+    store_kpi_metrics for the anonymous demo-isolation rationale."""
     # payload stored (truncated in store) so events can be inspected and replayed
-    log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20])
+    log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id)
     enriched = []
     for r in req.records:
         c = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
         enriched.append({**r, **c})
-    inserted = store_kpi_metrics(enriched)
+    inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
     update_ingestion_log(log_id, "completed", records=inserted)
     
     # Broadcast to local WebSockets
@@ -336,18 +342,25 @@ async def ingest_json(req: IngestJsonRequest) -> Dict[str, Any]:
 
 
 @app.post("/ingest/csv")
-async def ingest_csv(file: UploadFile = File(...), source: str = Form("csv_upload")) -> Dict[str, Any]:
+async def ingest_csv(
+    file: UploadFile = File(...),
+    source: str = Form("csv_upload"),
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
     import csv, io
     content = await file.read()
     rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"))))
-    return await ingest_json(IngestJsonRequest(records=rows, source=source))
+    return await ingest_json(IngestJsonRequest(records=rows, source=source), x_demo_session_id=x_demo_session_id)
 
 
 @app.post("/ingest/email")
-async def ingest_email(payload: Dict[str, Any]) -> Dict[str, Any]:
+async def ingest_email(
+    payload: Dict[str, Any],
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
     """Accept a Gmail-style payload and treat as a single record."""
     records = [{"source": "email", "raw": payload, "metric": payload.get("subject", "")}]
-    return await ingest_json(IngestJsonRequest(records=records, source="email"))
+    return await ingest_json(IngestJsonRequest(records=records, source="email"), x_demo_session_id=x_demo_session_id)
 
 
 @app.post("/webhook/{source_name}")
@@ -364,6 +377,8 @@ async def webhook_generic(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json")
     records = WebhookReceiver.parse_payload(payload, source_name)
+    # No X-Demo-Session-Id here on purpose: real external webhook callers aren't browsers,
+    # so their data stays globally visible — that's the point of a public ingestion demo.
     return await ingest_json(IngestJsonRequest(records=list(records), source=source_name))
 
 
@@ -419,9 +434,15 @@ async def pipeline_status() -> Dict[str, Any]:
 
 
 @app.post("/pipeline/replay/{log_id}")
-async def pipeline_replay(log_id: int) -> Dict[str, Any]:
-    """Re-ingest the stored payload of a past ingestion event (real replay)."""
-    row = get_ingestion_row(log_id)
+async def pipeline_replay(
+    log_id: int,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    """Re-ingest the stored payload of a past ingestion event (real replay). Ownership is
+    enforced in get_ingestion_row: a log_id from a different visitor's session 404s instead
+    of replaying their stored payload — this used to be replayable by anyone who guessed a
+    sequential id, regardless of who ingested it."""
+    row = get_ingestion_row(log_id, session_id=x_demo_session_id)
     if not row:
         raise HTTPException(status_code=404, detail="event_not_found")
     try:
@@ -430,12 +451,15 @@ async def pipeline_replay(log_id: int) -> Dict[str, Any]:
         records = None
     if not records:
         raise HTTPException(status_code=422, detail="no_stored_payload")
-    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"))
+    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"), x_demo_session_id=x_demo_session_id)
 
 
 @app.get("/pipeline/history")
-async def pipeline_history(limit: int = 100) -> Dict[str, Any]:
-    return {"history": get_pipeline_history(limit=limit)}
+async def pipeline_history(
+    limit: int = 100,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    return {"history": get_pipeline_history(limit=limit, session_id=x_demo_session_id)}
 
 
 @app.websocket("/live")
@@ -459,13 +483,16 @@ async def ws_live(ws: WebSocket):
 
 
 @app.get("/live/sse")
-async def live_sse(request: Request) -> StreamingResponse:
-    """Server-Sent Events — simpler one-way push for clients that can't use WebSocket."""
+async def live_sse(request: Request, session_id: Optional[str] = None) -> StreamingResponse:
+    """Server-Sent Events — simpler one-way push for clients that can't use WebSocket.
+    Browsers' native EventSource can't set custom headers, so this accepts the demo
+    session id as a query param; the header still wins if a client sends both."""
+    session_id = request.headers.get("X-Demo-Session-Id") or session_id
     async def gen():
         while True:
             if await request.is_disconnected():
                 break
-            recent = get_pipeline_history(limit=5)
+            recent = get_pipeline_history(limit=5, session_id=session_id)
             yield f"data: {json.dumps(recent)}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")

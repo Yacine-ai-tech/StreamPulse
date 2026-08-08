@@ -38,9 +38,24 @@ export type LiveEvent = {
 const BASE = import.meta.env.VITE_API_BASE_URL || "";
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
+// One anonymous, per-browser id — a visitor testing ingestion through this UI only sees
+// their own test events in /pipeline/history, not other visitors'. Not an auth credential;
+// real external webhooks (n8n, CRM sources) never send this and stay globally visible.
+export function demoSessionId(): string {
+  const key = "demo_session_id";
+  let id = localStorage.getItem(key);
+  if (!id) {
+    id = crypto.randomUUID ? crypto.randomUUID() : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    localStorage.setItem(key, id);
+  }
+  return id;
+}
+
 async function req<T>(path: string, init?: RequestInit, retryCount = 0): Promise<T> {
   try {
-    const res = await fetch(BASE + path, init);
+    const headers = new Headers(init?.headers);
+    headers.set("X-Demo-Session-Id", demoSessionId());
+    const res = await fetch(BASE + path, { ...init, headers });
     if (!res.ok) {
       if (res.status >= 500 && retryCount < 5) {
         await delay(2000 * (retryCount + 1));
@@ -113,7 +128,9 @@ export function openLive(
   const startSSE = () => {
     if (closed) return;
     onState("connecting");
-    es = new EventSource(BASE ? `${BASE}/live/sse` : "/live/sse");
+    // EventSource can't set custom headers, so the session id travels as a query param here
+    // (the API's live_sse endpoint accepts either).
+    es = new EventSource(`${BASE}/live/sse?session_id=${encodeURIComponent(demoSessionId())}`);
     es.onopen = () => onState("sse");
     es.onerror = () => { es?.close(); onState("down"); };
     // SSE payload is recent history, not per-ingest events — used as a fallback signal only.
