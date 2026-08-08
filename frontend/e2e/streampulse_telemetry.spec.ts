@@ -10,6 +10,7 @@ import { test, expect, Page } from '@playwright/test';
 const BASE_URL = process.env.STREAMPULSE_URL    || process.env.TEST_BASE_URL || 'http://localhost:5175';
 const API_URL  = process.env.STREAMPULSE_API_URL || 'http://localhost:8004';
 const AUTH_URL = process.env.INTELAI_API_URL     || 'http://localhost:8000';
+const ADMIN_PASS = process.env.ADMIN_PASS || '';
 
 async function assertNoReactCrash(page: Page) {
   await expect(page.locator('text=/An unexpected error occurred|Something went wrong/i')).toHaveCount(0);
@@ -17,7 +18,7 @@ async function assertNoReactCrash(page: Page) {
 
 async function getAuthToken(request: any): Promise<string> {
   const resp = await request.post(`${AUTH_URL}/api/login`, {
-    data: { username: 'admin', password: '***ROTATED-SECRET***' }
+    data: { username: 'admin', password: ADMIN_PASS }
   }).catch(() => null);
   if (resp && resp.ok()) {
     const body = await resp.json();
