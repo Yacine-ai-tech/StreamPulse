@@ -55,7 +55,7 @@ uvicorn api:app --port 8004
    └──────┬───────┘               └──────────────────┘
           ▼
    ┌──────────────┐
-   │  Classifier  │ ← keyword → embeddings → Claude Haiku
+   │  Classifier  │ ← keyword → embeddings → LLM Zero-Shot
    │ (6 domains)  │
    └──────┬───────┘
           ▼
