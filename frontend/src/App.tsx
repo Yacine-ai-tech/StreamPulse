@@ -1,6 +1,6 @@
 import UserGuidePage from './pages/UserGuidePage';
 import BenchmarkPage from './pages/BenchmarkPage';
-import ApiDocsPage from './pages/ApiDocsPage';
+import ApiDocs from './pages/ApiDocs';
 import { Component, ReactNode, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, useLocation } from "react-router-dom";
 import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3, Code2, BookOpen } from "lucide-react";
@@ -120,7 +120,7 @@ export default function App() {
                 <Route path="/alerts" element={<Alerts />} />
                 <Route path="/automation" element={<Automation />} />
                 <Route path="/classifier" element={<Classifier />} />
-                <Route path="/api-docs" element={<ApiDocsPage />} />
+                <Route path="/api-docs" element={<ApiDocs />} />
                 <Route path="/benchmark" element={<BenchmarkPage />} />
                 <Route path="/user-guide" element={<UserGuidePage />} />
                 <Route path="*" element={<Live />} />
