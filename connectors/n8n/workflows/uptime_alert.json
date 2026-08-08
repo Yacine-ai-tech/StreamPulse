@@ -9,11 +9,11 @@
     },
     {
       "parameters": {
-        "url": "https://gateway.ysiddo-ai-projects.app/api/uptime/status",
+        "url": "http://localhost:8000/api/uptime/status",
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer ysiddo-ai-projects_vol1-session-2026" }
+            { "name": "Authorization", "value": "Bearer {{$env.OMNIINTEL_INTERNAL_TOKEN}}" }
           ]
         },
         "options": {}
