@@ -2,7 +2,7 @@ import { ArrowRight, Split } from "lucide-react";
 import { PageHeader } from "../kit/AppShell";
 import { Card, Chip, StatTile } from "../kit/primitives";
 
-/* Figures verified against eval/CLASSIFIER_BENCHMARK.md (GAP_REPORT §2) — including the
+/* Figures verified against eval/CLASSIFIER_BENCHMARK.md — including the
    benchmark's own caveats. Do not edit without re-running the benchmark. */
 
 export default function Classifier() {
