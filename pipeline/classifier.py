@@ -16,7 +16,6 @@ FEATURES:
 from __future__ import annotations
 
 import asyncio
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -130,7 +129,7 @@ class DomainClassifier:
     def classify(text: str, hints: Optional[Dict[str, Any]] = None) -> Tuple[str, float]:
         """
         Classify text to domain with confidence score.
-        
+
         Returns: (domain, confidence)
         """
         text_lower = text.lower()
@@ -139,21 +138,21 @@ class DomainClassifier:
         for domain, patterns in DOMAIN_PATTERNS.items():
             score = 0
             keywords = patterns["keywords"]
-            
+
             # Count keyword matches
             for keyword in keywords:
                 if keyword in text_lower:
                     score += 1
-            
+
             # Boost score if hints match
             if hints and hints.get("domain") == domain:
                 score += 5
-            
+
             if hints and hints.get("metrics"):
                 for metric in hints["metrics"]:
                     if metric in text_lower:
                         score += 2
-            
+
             scores[domain] = score
 
         if not scores or max(scores.values()) == 0:
@@ -508,11 +507,12 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     domain, conf = DomainClassifier.classify(content or "")
     if fast_only or conf >= 0.5:
         return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
-        
+
     if os.getenv("STREAMPULSE_HYBRID_LLM") == "1":
         try:
             # Use the inference adapter for BGE embeddings (supports Orchestrator/Cohere/Jina)
-            import sys, os as _os
+            import sys
+            import os as _os
             _svc_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "services")
             if _svc_dir not in sys.path:
                 sys.path.insert(0, _svc_dir)
@@ -565,7 +565,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         model = settings.LLM_JUDGE
         if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
             model = "gemini/gemini-2.5-flash"
-            
+
         resp = completion(
             model=model,
             messages=[{"role": "user", "content":
@@ -578,9 +578,8 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
             return {"domain": label, "confidence": 0.7, "method": "llm"}
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
-        
-    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
 
+    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
 
 
 __all__ = [
@@ -591,4 +590,3 @@ __all__ = [
     "classify",
     "get_realtime_pipeline",
 ]
-
