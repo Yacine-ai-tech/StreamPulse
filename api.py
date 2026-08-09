@@ -379,7 +379,7 @@ async def webhook_generic(
     records = WebhookReceiver.parse_payload(payload, source_name)
     # No X-Demo-Session-Id here on purpose: real external webhook callers aren't browsers,
     # so their data stays globally visible — that's the point of a public ingestion demo.
-    return await ingest_json(IngestJsonRequest(records=list(records), source=source_name))
+    return await ingest_json(IngestJsonRequest(records=list(records), source=source_name), x_demo_session_id=None)
 
 
 @app.post("/webhook/{source_name}/with-vision")
@@ -417,7 +417,7 @@ async def webhook_with_vision(
                     except Exception as e:
                         log.warning("vision compose failed: %s", e)
                 enriched.append(dict(r))
-        return await ingest_json(IngestJsonRequest(records=enriched, source=source_name))
+        return await ingest_json(IngestJsonRequest(records=enriched, source=source_name), x_demo_session_id=None)
     except Exception as e:
         log.warning("with-vision processing failed: %s", e)
         raise HTTPException(status_code=400, detail="invalid_payload")
