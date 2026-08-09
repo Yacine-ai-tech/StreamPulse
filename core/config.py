@@ -40,23 +40,23 @@ class Settings:
     ]
 
     # ── n8n integration ───────────────────────────────────────────────
-    N8N_BASE_URL  = os.getenv("N8N_BASE_URL", "")
-    N8N_API_KEY   = os.getenv("N8N_API_KEY", "")
+    N8N_BASE_URL = os.getenv("N8N_BASE_URL", "")
+    N8N_API_KEY = os.getenv("N8N_API_KEY", "")
 
     # ── Outbound Webhook Integration (e.g., to IntelAI) ───────────────
     EXTERNAL_WEBHOOK_URL = os.getenv("EXTERNAL_WEBHOOK_URL", "")
     EXTERNAL_WEBHOOK_SCHEMA_TYPE = os.getenv("EXTERNAL_WEBHOOK_SCHEMA_TYPE", "kpi_metrics")
 
     # ── Google OAuth2 (Sheets / Drive / Gmail) ────────────────────────
-    GOOGLE_CLIENT_ID     = os.getenv("GOOGLE_CLIENT_ID", "")
+    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
     GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GMAIL_PRIMARY        = os.getenv("GMAIL_PRIMARY", "")
-    DRIVE_ACCOUNT        = os.getenv("DRIVE_ACCOUNT", "")
-    GSHEETS_ACCOUNT      = os.getenv("GSHEETS_ACCOUNT", "")
+    GMAIL_PRIMARY = os.getenv("GMAIL_PRIMARY", "")
+    DRIVE_ACCOUNT = os.getenv("DRIVE_ACCOUNT", "")
+    GSHEETS_ACCOUNT = os.getenv("GSHEETS_ACCOUNT", "")
 
     # ── ClickUp ───────────────────────────────────────────────────────
-    CLICKUP_API_KEY       = os.getenv("CLICKUP_API_KEY", "")
-    CLICKUP_WORKSPACE_ID  = os.getenv("CLICKUP_WORKSPACE_ID", "")
+    CLICKUP_API_KEY = os.getenv("CLICKUP_API_KEY", "")
+    CLICKUP_WORKSPACE_ID = os.getenv("CLICKUP_WORKSPACE_ID", "")
 
 
 settings = Settings()
@@ -74,12 +74,13 @@ def _apply_gemini_fallback():
             if model_str and ("openai" in model_str.lower() or "gpt-" in model_str.lower()):
                 return "gemini/gemini-2.5-flash"
             return model_str
-            
+
         for attr in dir(settings):
             if attr.startswith("LLM_") and isinstance(getattr(settings, attr), str):
                 setattr(settings, attr, fallback(getattr(settings, attr)))
-        
+
         if hasattr(settings, "JUDGE_MODELS") and isinstance(settings.JUDGE_MODELS, list):
             settings.JUDGE_MODELS = [fallback(m) for m in settings.JUDGE_MODELS]
+
 
 _apply_gemini_fallback()
