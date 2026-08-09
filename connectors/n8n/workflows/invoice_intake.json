@@ -30,7 +30,7 @@
     },
     {
       "parameters": {
-        "url": "https://docintel.ysiddo-ai-projects.app/api/v1/extract",
+        "url": "https://your-docintel-instance.example.com/api/v1/extract",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
@@ -91,7 +91,7 @@
     },
     {
       "parameters": {
-        "url": "https://streampulse.ysiddo-ai-projects.app/ingest/json",
+        "url": "https://your-streampulse-instance.example.com/ingest/json",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
