@@ -28,7 +28,7 @@ class Settings:
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
     if not WEBHOOK_SECRET and os.getenv("ENV") == "production":
         raise ValueError("WEBHOOK_SECRET must be set in production")
 
