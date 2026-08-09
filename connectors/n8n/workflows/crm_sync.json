@@ -42,7 +42,7 @@
     },
     {
       "parameters": {
-        "url": "https://streampulse.ysiddo-ai-projects.app/ingest/json",
+        "url": "https://your-streampulse-instance.example.com/ingest/json",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",

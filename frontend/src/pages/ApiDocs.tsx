@@ -1,7 +1,17 @@
 import { useState } from "react";
 import { Terminal, Copy, Check, Code2, Globe, Shield, Zap, BookOpen } from "lucide-react";
 
-const BASE_URL = "https://gateway.ysiddo-ai-projects.app/streampulse";
+// Same resolution order as lib/api.ts's request client: an explicit VITE_API_BASE_URL
+// wins (split-deployment setups), otherwise fall back to wherever this page is being
+// served from (self-hosted, same-origin setups — the default via the Dockerfile).
+const BASE_URL =
+  import.meta.env.VITE_API_BASE_URL ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+// Same logic, but as a ws(s):// origin, so the Live Streaming docs show a websocket
+// URL that actually matches whoever is viewing this page instead of the author's own
+// deployment.
+const WS_BASE_URL = BASE_URL.replace(/^http/, "ws");
 
 type Snippets = { curl: string; python: string; node: string };
 
@@ -280,9 +290,9 @@ const ENDPOINTS: Endpoint[] = [
     body: null,
     response: `{"event": "ingest", "source": "manual_json", "records": [{"metric": "revenue", "value": 128000, "domain": "Finance", "confidence": 0.8, "method": "keyword"}]}`,
     snippets: {
-      curl: `# curl doesn't speak WebSocket; use websocat or a WS client library\nwebsocat "wss://gateway.ysiddo-ai-projects.app/streampulse/live"`,
-      python: `import asyncio, websockets, json\n\nasync def main():\n    async with websockets.connect("wss://gateway.ysiddo-ai-projects.app/streampulse/live") as ws:\n        async for msg in ws:\n            print(json.loads(msg))\n\nasyncio.run(main())`,
-      node: `const ws = new WebSocket("wss://gateway.ysiddo-ai-projects.app/streampulse/live");\nws.onmessage = (e) => console.log(JSON.parse(e.data));`,
+      curl: `# curl doesn't speak WebSocket; use websocat or a WS client library\nwebsocat "${WS_BASE_URL}/live"`,
+      python: `import asyncio, websockets, json\n\nasync def main():\n    async with websockets.connect("${WS_BASE_URL}/live") as ws:\n        async for msg in ws:\n            print(json.loads(msg))\n\nasyncio.run(main())`,
+      node: `const ws = new WebSocket("${WS_BASE_URL}/live");\nws.onmessage = (e) => console.log(JSON.parse(e.data));`,
     },
   },
   {
@@ -406,7 +416,7 @@ export default function ApiDocs() {
           <div style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 12, padding: "16px 20px" }}>
             <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10, flexWrap: "wrap" }}>
               <span style={{ fontSize: "0.75rem", fontWeight: 700, fontFamily: "monospace", background: `${methodColor(ep.method)}26`, color: methodColor(ep.method), borderRadius: 5, padding: "3px 8px" }}>{ep.method}</span>
-              <code style={{ fontSize: "0.9rem" }}>{ep.method === "WS" ? "wss://" + BASE_URL.replace(/^https?:\/\//, "") + ep.path : BASE_URL + ep.path}</code>
+              <code style={{ fontSize: "0.9rem" }}>{ep.method === "WS" ? WS_BASE_URL + ep.path : BASE_URL + ep.path}</code>
               <span style={{ fontSize: "0.68rem", color: "#64748b", marginLeft: "auto" }}>{ep.auth}</span>
             </div>
             <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>{ep.desc}</p>

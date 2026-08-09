@@ -15,7 +15,8 @@ def _sign(payload: bytes, secret: str) -> str:
 
 
 def test_valid_signature_passes():
-    payload, secret = b'{"metric":"revenue","value":100}', "topsecret"
+    # Test with sample payload and test secret (for testing purposes only)
+    payload, secret = b'{"metric":"revenue","value":100}', "test_secret"
     assert WebhookReceiver.verify_signature(payload, _sign(payload, secret), secret=secret)
 
 
