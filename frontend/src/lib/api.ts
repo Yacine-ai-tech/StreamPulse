@@ -1,6 +1,6 @@
 export class ApiError extends Error { constructor(public status: number, message: string) { super(message); this.name = 'ApiError'; } }
 
-/** Typed client for the StreamPulse API (shapes verified in GAP_REPORT.md §1). */
+/** Typed client for the StreamPulse API. */
 
 export type ClassifiedRecord = Record<string, unknown> & {
   domain?: string;
