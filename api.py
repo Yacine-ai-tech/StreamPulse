@@ -2,6 +2,14 @@
 StreamPulse API — Real-time multi-source data pipeline.
 """
 from __future__ import annotations
+import os as _os
+from fastapi.staticfiles import StaticFiles
+from fastapi.responses import JSONResponse
+import uuid
+import time
+import os
+import requests
+import threading
 
 import asyncio
 import json
@@ -18,7 +26,6 @@ from core.logger import get_logger
 from connectors.webhook_receiver import WebhookReceiver
 from store import (
     get_ingestion_row,
-    get_kpi_metrics,
     get_pipeline_history,
     init_db,
     log_data_ingestion,
@@ -33,16 +40,12 @@ app = FastAPI(title="StreamPulse", version="0.1.0",
               description="Real-time business data pipeline.")
 
 # --- ETHICAL TELEMETRY ---
-import threading
-import requests
-import os
-import time
-import uuid
+
 
 def _send_telemetry():
     if os.environ.get("TELEMETRY_OPT_OUT", "").lower() in ("1", "true", "yes"):
         return
-    
+
     lock_file = "/tmp/.ysiddo_telemetry.lock"
     try:
         if os.path.exists(lock_file):
@@ -59,41 +62,36 @@ def _send_telemetry():
         else:
             import logging
             logging.info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
-            
+
         requests.post(
-            "http://localhost:8000/telemetry", 
+            "http://localhost:8000/telemetry",
             json={"service": "StreamPulse", "event": "startup", "instance_id": str(uuid.getnode())[:8]},
             timeout=2
         )
     except Exception:
         pass
 
+
 threading.Thread(target=_send_telemetry, daemon=True).start()
 # -------------------------
 
-
-from fastapi import Request
-from fastapi.responses import JSONResponse
-from fastapi.staticfiles import StaticFiles
-import os as _os
 
 @app.middleware("http")
 async def verify_internal_token(request: Request, call_next):
     # Allow health checks, public auth routes, and frontend static assets
     if request.method == "OPTIONS" or request.url.path in ["/", "/health", "/docs", "/openapi.json", "/api/redoc", "/favicon.png", "/favicon.ico", "/mark.png", "/logo.png"] or request.url.path.startswith("/api/v1/auth/") or request.url.path.startswith("/assets/") or request.url.path.startswith("/static/"):
         return await call_next(request)
-        
+
     token = request.headers.get("X-OmniIntel-Internal-Token")
     expected_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
-    
+
     if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
         return JSONResponse(status_code=403, content={"detail": "Missing or invalid X-OmniIntel-Internal-Token"})
-        
+
     return await call_next(request)
 
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
-
 
 
 try:
@@ -119,10 +117,12 @@ try:
 except Exception as e:
     log.warning("init_db at import failed: %s", e)
 
+
 @app.on_event("startup")
 async def startup_event():
     import threading
     from connectors.n8n import n8n
+
     def _provision():
         try:
             res = n8n.auto_provision()
@@ -138,22 +138,22 @@ try:
 except Exception:
     def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:  # type: ignore
         c = (content or "").lower()
-        if any(k in c for k in ("revenue", "profit", "ebitda")): return {"domain": "Finance", "confidence": 0.8}
-        if any(k in c for k in ("customer", "mrr", "arr")): return {"domain": "Growth", "confidence": 0.7}
-        if any(k in c for k in ("headcount", "hr", "turnover")): return {"domain": "People", "confidence": 0.7}
-        if any(k in c for k in ("uptime", "incident")): return {"domain": "IT_Ops", "confidence": 0.7}
-        if any(k in c for k in ("carbon", "esg")): return {"domain": "ESG", "confidence": 0.7}
+        if any(k in c for k in ("revenue", "profit", "ebitda")):
+            return {"domain": "Finance", "confidence": 0.8}
+        if any(k in c for k in ("customer", "mrr", "arr")):
+            return {"domain": "Growth", "confidence": 0.7}
+        if any(k in c for k in ("headcount", "hr", "turnover")):
+            return {"domain": "People", "confidence": 0.7}
+        if any(k in c for k in ("uptime", "incident")):
+            return {"domain": "IT_Ops", "confidence": 0.7}
+        if any(k in c for k in ("carbon", "esg")):
+            return {"domain": "ESG", "confidence": 0.7}
         return {"domain": "Operations", "confidence": 0.5}
-
-
 
 
 # ─────────────────────────────────────────────────────────────────────────────
 # WebSocket clients & Message Broker (Redis/Kafka)
 # ─────────────────────────────────────────────────────────────────────────────
-import os
-import asyncio
-import json
 
 _clients: Set[WebSocket] = set()
 
@@ -165,6 +165,7 @@ _redis_pubsub = None
 _kafka_producer = None
 _kafka_consumer = None
 
+
 async def _setup_broker():
     if _MESSAGE_BROKER == "redis":
         await _setup_redis()
@@ -172,6 +173,7 @@ async def _setup_broker():
         await _setup_kafka()
     else:
         log.warning(f"Unknown MESSAGE_BROKER: {_MESSAGE_BROKER}")
+
 
 async def _setup_redis():
     global _redis_pubsub
@@ -184,16 +186,17 @@ async def _setup_redis():
         _redis_pubsub = r.pubsub()
         await _redis_pubsub.subscribe("streampulse_ingest")
         log.info("✅ Redis PubSub broker enabled for multi-node broadcast")
-        
+
         async def _listen():
             async for message in _redis_pubsub.listen():
                 if message["type"] == "message":
                     payload = json.loads(message["data"])
                     await _local_broadcast(payload)
-        
+
         asyncio.create_task(_listen())
     except Exception as e:
         log.warning(f"Failed to setup Redis broker: {e}")
+
 
 async def _setup_kafka():
     global _kafka_producer, _kafka_consumer
@@ -201,10 +204,10 @@ async def _setup_kafka():
         log.warning("MESSAGE_BROKER=kafka but KAFKA_BROKER_URL is not set")
         return
     try:
-        from aiokafka import AIOKafkaProducer, AIOKafkaConsumer # type: ignore
+        from aiokafka import AIOKafkaProducer, AIOKafkaConsumer  # type: ignore
         _kafka_producer = AIOKafkaProducer(bootstrap_servers=_KAFKA_BROKER_URL)
         await _kafka_producer.start()
-        
+
         _kafka_consumer = AIOKafkaConsumer(
             "streampulse_ingest",
             bootstrap_servers=_KAFKA_BROKER_URL,
@@ -217,10 +220,11 @@ async def _setup_kafka():
             async for msg in _kafka_consumer:
                 payload = json.loads(msg.value.decode("utf-8"))
                 await _local_broadcast(payload)
-                
+
         asyncio.create_task(_listen())
     except Exception as e:
         log.warning(f"Failed to setup Kafka broker: {e}")
+
 
 async def _local_broadcast(payload: Dict[str, Any]) -> None:
     dead: List[WebSocket] = []
@@ -232,12 +236,13 @@ async def _local_broadcast(payload: Dict[str, Any]) -> None:
     for ws in dead:
         _clients.discard(ws)
 
+
 async def _broadcast(payload: Dict[str, Any]) -> None:
     # Always broadcast locally
     await _local_broadcast(payload)
-    
+
     msg_str = json.dumps(payload)
-    
+
     if _MESSAGE_BROKER == "redis" and _REDIS_URL:
         try:
             import redis.asyncio as aioredis
@@ -245,22 +250,24 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
             await r.publish("streampulse_ingest", msg_str)
         except Exception as e:
             log.warning(f"Redis publish failed: {e}")
-            
+
     elif _MESSAGE_BROKER == "kafka" and _kafka_producer:
         try:
             await _kafka_producer.send_and_wait("streampulse_ingest", msg_str.encode("utf-8"))
         except Exception as e:
             log.warning(f"Kafka publish failed: {e}")
 
+
 @app.on_event("startup")
 async def startup_broker():
     await _setup_broker()
+
 
 async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     """Forward classified records to an external system (e.g. IntelAI) enforcing strict schema."""
     if not settings.EXTERNAL_WEBHOOK_URL:
         return
-        
+
     import httpx
     # Wrap the records exactly as IntelAI (or any generic strict system) expects
     payload = {
@@ -268,14 +275,14 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
         "schema_type": settings.EXTERNAL_WEBHOOK_SCHEMA_TYPE,
         "data": records
     }
-    
+
     # Pass along the internal mesh token if targeting another internal microservice
     import os
     headers = {
         "Content-Type": "application/json",
         "X-OmniIntel-Internal-Token": os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
     }
-    
+
     try:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(settings.EXTERNAL_WEBHOOK_URL, json=payload, headers=headers)
@@ -297,6 +304,7 @@ class IngestJsonRequest(BaseModel):
 _last_db_check = 0.0
 _cached_db_status = "ok"
 
+
 @app.get("/health")
 async def health() -> Dict[str, Any]:
     global _last_db_check, _cached_db_status
@@ -312,7 +320,6 @@ async def health() -> Dict[str, Any]:
             _cached_db_status = f"error: {str(e)}"
         _last_db_check = now
     return {"status": "ok" if _cached_db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": _cached_db_status}
-
 
 
 @app.post("/ingest/json")
@@ -331,13 +338,13 @@ async def ingest_json(
         enriched.append({**r, **c})
     inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
     update_ingestion_log(log_id, "completed", records=inserted)
-    
+
     # Broadcast to local WebSockets
     asyncio.create_task(_broadcast({"event": "ingest", "source": req.source, "records": enriched}))
-    
+
     # Dispatch Outbound Webhook to IntelAI or custom CRM
     asyncio.create_task(_dispatch_external_webhook(enriched))
-    
+
     return {"source": req.source, "records_in": len(req.records), "records_inserted": inserted, "log_id": log_id}
 
 
@@ -347,7 +354,8 @@ async def ingest_csv(
     source: str = Form("csv_upload"),
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
 ) -> Dict[str, Any]:
-    import csv, io
+    import csv
+    import io
     content = await file.read()
     rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"))))
     return await ingest_json(IngestJsonRequest(records=rows, source=source), x_demo_session_id=x_demo_session_id)
@@ -488,6 +496,7 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
     Browsers' native EventSource can't set custom headers, so this accepts the demo
     session id as a query param; the header still wins if a client sends both."""
     session_id = request.headers.get("X-Demo-Session-Id") or session_id
+
     async def gen():
         while True:
             if await request.is_disconnected():
@@ -496,6 +505,3 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
             yield f"data: {json.dumps(recent)}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")
-
-
-
