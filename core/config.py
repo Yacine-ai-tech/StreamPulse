@@ -39,7 +39,9 @@ class Settings:
         if o.strip()
     ]
 
-    # ── n8n integration ───────────────────────────────────────────────
+    # ── n8n integration (Public Integration Layer Only) ───────────────
+    # These are for connecting TO an external n8n instance
+    # Actual n8n service credentials are in the separate n8n-service repository
     N8N_BASE_URL = os.getenv("N8N_BASE_URL", "")
     N8N_API_KEY = os.getenv("N8N_API_KEY", "")
 
@@ -47,16 +49,18 @@ class Settings:
     EXTERNAL_WEBHOOK_URL = os.getenv("EXTERNAL_WEBHOOK_URL", "")
     EXTERNAL_WEBHOOK_SCHEMA_TYPE = os.getenv("EXTERNAL_WEBHOOK_SCHEMA_TYPE", "kpi_metrics")
 
-    # ── Google OAuth2 (Sheets / Drive / Gmail) ────────────────────────
-    GOOGLE_CLIENT_ID = os.getenv("GOOGLE_CLIENT_ID", "")
-    GOOGLE_CLIENT_SECRET = os.getenv("GOOGLE_CLIENT_SECRET", "")
-    GMAIL_PRIMARY = os.getenv("GMAIL_PRIMARY", "")
-    DRIVE_ACCOUNT = os.getenv("DRIVE_ACCOUNT", "")
-    GSHEETS_ACCOUNT = os.getenv("GSHEETS_ACCOUNT", "")
+    # ── Classifier Configuration ───────────────────────────────────────
+    CLASSIFIER_KEYWORD_THRESHOLD = float(os.getenv("CLASSIFIER_KEYWORD_THRESHOLD", "0.7"))
+    CLASSIFIER_EMBEDDING_THRESHOLD = float(os.getenv("CLASSIFIER_EMBEDDING_THRESHOLD", "0.5"))
+    CLASSIFIER_LLM_CONFIDENCE = float(os.getenv("CLASSIFIER_LLM_CONFIDENCE", "0.7"))
+    CLASSIFIER_ENABLE_CACHE = os.getenv("CLASSIFIER_ENABLE_CACHE", "true").lower() in ("1", "true", "yes")
+    STREAMPULSE_HYBRID_LLM = os.getenv("STREAMPULSE_HYBRID_LLM", "1")
+    STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-m3")
 
-    # ── ClickUp ───────────────────────────────────────────────────────
-    CLICKUP_API_KEY = os.getenv("CLICKUP_API_KEY", "")
-    CLICKUP_WORKSPACE_ID = os.getenv("CLICKUP_WORKSPACE_ID", "")
+    # ── Storage Configuration ───────────────────────────────────────────
+    ENABLE_PGVECTOR = os.getenv("ENABLE_PGVECTOR", "false").lower() in ("1", "true", "yes")
+    ENABLE_DUCKDB = os.getenv("ENABLE_DUCKDB", "false").lower() in ("1", "true", "yes")
+    DUCKDB_PATH = os.getenv("DUCKDB_PATH", "streampulse_analytics.duckdb")
 
 
 settings = Settings()

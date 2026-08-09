@@ -1,5 +1,5 @@
 # Render Blueprint — disaster-recovery / one-click redeploy. Builds from ./Dockerfile (honors $PORT),
-# health-checks /health. No secrets here: every key is `sync: false` (set values in the dashboard).
+# health-checks /health. All sensitive values must be set in Render dashboard (sync: false).
 # Runs on Render free. STREAMPULSE_HYBRID_LLM=1 + an LLM key enables Claude zero-shot escalation
 # for the classifier (keyword/embedding fast-paths work without it).
 services:
