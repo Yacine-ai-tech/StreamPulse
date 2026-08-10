@@ -10,8 +10,10 @@ import httpx
 import psutil
 import os
 
-# Webhook secret for HMAC signing
-WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET", "topsecret_webhook_key")
+# Webhook secret for HMAC signing (must be set via environment variable)
+WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
+if not WEBHOOK_SECRET:
+    raise ValueError("WEBHOOK_SECRET environment variable must be set for HMAC signing")
 
 # Sample webhook payload (GitHub issue_comment style)
 SAMPLE_PAYLOAD = {
