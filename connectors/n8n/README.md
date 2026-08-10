@@ -9,6 +9,15 @@ First-class n8n connector for StreamPulse.
    - `workflows/auction_aggregator.json` — multi-source auction listing aggregator
    - `workflows/invoice_intake.json` — Gmail-attachment → DocIntel → StreamPulse pipeline
    - `workflows/crm_sync.json` — Sheet/CRM → KPI stream
+   - `workflows/uptime_alert.json` — scheduled uptime check → email alert
+   - `workflows/master_trigger.json` — scheduled harness that exercises the others
+
+**Before running an imported workflow**, replace the placeholder URLs/emails baked into
+its HTTP Request and Send Email nodes (e.g. `https://your-streampulse-instance.example.com`,
+`https://your-docintel-instance.example.com`, `alerts@your-domain.example.com`) with your
+own deployment's actual host and addresses. These are static JSON templates — they can't
+read environment variables at import/runtime, so there's no env var to set instead; edit
+the node parameters directly in the n8n UI (or in the JSON before importing).
 
 ## Custom Node
 
