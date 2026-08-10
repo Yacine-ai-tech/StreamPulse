@@ -5,11 +5,10 @@ from __future__ import annotations
 import os as _os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
-import uuid
 import time
 import os
-import requests
 import threading
+import uuid as _uuid
 
 import asyncio
 import json
@@ -34,39 +33,72 @@ from store import (
     update_ingestion_log,
 )
 
+# Import optional storage backends
+try:
+    from storage import get_vector_cache, get_analytics_engine
+    _storage_available = True
+except ImportError:
+    _storage_available = False
+
 log = get_logger(__name__)
 
 app = FastAPI(title="StreamPulse", version="0.1.0",
               description="Real-time business data pipeline.")
 
-# --- ETHICAL TELEMETRY ---
+# --- ETHICAL TELEMETRY (see TELEMETRY.md) ---
+
+
+def _telemetry_instance_id() -> str:
+    """
+    A random, locally-generated install ID — NOT derived from MAC address or any other
+    hardware fingerprint. Persisted under LOGS_DIR so repeat startups of the same install
+    report the same ID (for dedup on the receiving end); delete the file to reset it.
+    See TELEMETRY.md for why this is a random UUID rather than a hardware-derived value.
+    """
+    id_file = os.path.join(settings.LOGS_DIR, ".telemetry_instance_id")
+    try:
+        if os.path.exists(id_file):
+            existing = open(id_file).read().strip()
+            if existing:
+                return existing
+    except Exception:
+        pass
+    new_id = _uuid.uuid4().hex[:16]
+    try:
+        with open(id_file, "w") as f:
+            f.write(new_id)
+    except Exception:
+        pass
+    return new_id
 
 
 def _send_telemetry():
+    """
+    One anonymous startup ping per ~6h to TELEMETRY_URL, so the project can count distinct
+    installs. Sends only {service, event, instance_id} — no ingested records, filenames,
+    IPs, or other request data. Disable entirely with TELEMETRY_OPT_OUT=true.
+    """
     if os.environ.get("TELEMETRY_OPT_OUT", "").lower() in ("1", "true", "yes"):
         return
 
-    lock_file = "/tmp/.ysiddo_telemetry.lock"
+    lock_file = os.path.join(settings.LOGS_DIR, ".telemetry_last_ping")
     try:
-        if os.path.exists(lock_file):
-            if time.time() - os.path.getmtime(lock_file) < 21600:
-                return
+        if os.path.exists(lock_file) and time.time() - os.path.getmtime(lock_file) < 21600:
+            return
         with open(lock_file, "w") as f:
             f.write(str(time.time()))
     except Exception:
         pass
 
     try:
-        if "log" in globals():
-            globals()["log"].info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
-        else:
-            import logging
-            logging.info("📡 Anonymous telemetry ENABLED (set TELEMETRY_OPT_OUT=true to disable).")
-
-        requests.post(
-            "http://localhost:8000/telemetry",
-            json={"service": "StreamPulse", "event": "startup", "instance_id": str(uuid.getnode())[:8]},
-            timeout=2
+        telemetry_url = os.environ.get(
+            "TELEMETRY_URL", "https://gateway.ysiddo-ai-projects.app/telemetry"
+        )
+        log.info("Anonymous telemetry ping to %s (set TELEMETRY_OPT_OUT=true to disable).", telemetry_url)
+        httpx.post(
+            telemetry_url,
+            json={"service": "StreamPulse", "event": "startup", "instance_id": _telemetry_instance_id()},
+            timeout=2,
         )
     except Exception:
         pass
@@ -505,3 +537,101 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
             yield f"data: {json.dumps(recent)}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")
+
+
+# ── Analytics & Storage Endpoints (STRATEGY.md compliant) ───────────────────────
+
+@app.get("/analytics/cache-stats")
+async def get_cache_stats() -> Dict[str, Any]:
+    """Get classification cache performance statistics."""
+    try:
+        from pipeline.classifier import get_cache_stats
+        return get_cache_stats()
+    except Exception as e:
+        log.error("Failed to get cache stats: %s", e)
+        return {"error": str(e), "cache_hits": 0, "cache_misses": 0, "hit_rate": 0.0}
+
+@app.get("/analytics/storage-stats")
+async def get_storage_stats() -> Dict[str, Any]:
+    """Get storage backend statistics (pgvector, DuckDB)."""
+    stats = {}
+    
+    if _storage_available:
+        try:
+            from storage import get_vector_cache, get_analytics_engine
+            
+            vector_cache = get_vector_cache()
+            stats["vector_cache"] = vector_cache.get_stats()
+            
+            analytics_engine = get_analytics_engine()
+            stats["analytics"] = analytics_engine.get_stats()
+        except Exception as e:
+            log.error("Failed to get storage stats: %s", e)
+            stats["error"] = str(e)
+    else:
+        stats["storage_available"] = False
+    
+    return stats
+
+@app.get("/analytics/domain-summary")
+async def get_domain_summary(days: int = 7) -> Dict[str, Any]:
+    """Get domain-level summary using DuckDB analytics."""
+    if not _storage_available:
+        return {"error": "Storage backend not available"}
+    
+    try:
+        from storage import get_analytics_engine
+        analytics = get_analytics_engine()
+        df = analytics.get_domain_summary(days=days)
+        return {
+            "data": df.to_dict(orient="records"),
+            "count": len(df),
+            "period_days": days
+        }
+    except Exception as e:
+        log.error("Failed to get domain summary: %s", e)
+        return {"error": str(e)}
+
+@app.get("/analytics/classification-trends")
+async def get_classification_trends(days: int = 30) -> Dict[str, Any]:
+    """Get classification method trends over time."""
+    if not _storage_available:
+        return {"error": "Storage backend not available"}
+    
+    try:
+        from storage import get_analytics_engine
+        analytics = get_analytics_engine()
+        df = analytics.get_classification_trends(days=days)
+        return {
+            "data": df.to_dict(orient="records"),
+            "count": len(df),
+            "period_days": days
+        }
+    except Exception as e:
+        log.error("Failed to get classification trends: %s", e)
+        return {"error": str(e)}
+
+@app.post("/analytics/refresh")
+async def refresh_analytics() -> Dict[str, Any]:
+    """Refresh analytics data and materialized views."""
+    if not _storage_available:
+        return {"error": "Storage backend not available"}
+    
+    try:
+        from storage import get_analytics_engine
+        analytics = get_analytics_engine()
+        
+        # Import fresh data from PostgreSQL
+        imported = analytics.import_from_postgres()
+        
+        # Refresh materialized views
+        refreshed = analytics.refresh_materialized_views()
+        
+        return {
+            "success": True,
+            "records_imported": imported,
+            "views_refreshed": refreshed
+        }
+    except Exception as e:
+        log.error("Failed to refresh analytics: %s", e)
+        return {"error": str(e), "success": False}
