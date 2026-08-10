@@ -32,8 +32,8 @@
     },
     {
       "parameters": {
-        "fromEmail": "alerts@ysiddo-ai-projects.app",
-        "toEmail": "contact@ysiddo-ai-projects.app",
+        "fromEmail": "alerts@your-domain.example.com",
+        "toEmail": "contact@your-domain.example.com",
         "subject": "={{ $json.count }} Microservice(s) DOWN",
         "text": "=URGENT:\n\nThe following services are currently DOWN and failing their 5-minute ping:\n\n{{ $json.downServices }}\n\nPlease check the Omni-Admin dashboard immediately."
       },

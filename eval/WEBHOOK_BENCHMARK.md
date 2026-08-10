@@ -5,7 +5,7 @@ A benchmark of the webhook ingestion and security (HMAC signature) layers. Repro
 
 ## Setup
 The benchmark fires 100 concurrent webhook requests simulating the GitHub `issue_comment` payload.
-- 90% of requests are properly signed with `topsecret_webhook_key`.
+- 90% of requests are properly signed with a test webhook secret (set via WEBHOOK_SECRET env var).
 - 10% of requests use an invalid signature to test security rejection.
 
 ## Results (N=100)
