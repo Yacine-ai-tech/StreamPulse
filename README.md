@@ -9,12 +9,14 @@
 ## What It Does
 
 - **6 source types**: JSON, CSV, Gmail email, webhooks (HMAC-verified), Google Sheets, custom n8n
-- **6-domain classifier**: keyword fast-path → embedding fallback → Claude Haiku zero-shot
+- **Hybrid 6-domain classifier**: keyword fast-path → embedding fallback → Claude Haiku zero-shot (with content hash caching)
 - **`/webhook/{source}/with-vision`**: composes with DocIntel `/classify-image` for auction/inventory aggregation
 - **Live dashboard** via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
-- **n8n custom node + 3 importable workflows** in `connectors/n8n/`
+- **n8n custom node + 5 importable workflows** in `connectors/n8n/`
 - **Prefect 3 flow** for retried, scheduled execution in `orchestration/prefect_flow.py`
 - **dlt declarative sources** for Gmail / Sheets / webhook in `ingestion/dlt_sources.py`
+- **Advanced storage**: pgvector for embedding cache, DuckDB for analytics queries (optional)
+- **2026 stack**: BAAI/bge-m3 embeddings, LiteLLM multi-provider, configurable thresholds
 
 ## Quick Start
 
@@ -53,14 +55,17 @@ uvicorn api:app --port 8004
           ▼
    ┌──────────────┐
    │  Classifier  │ ← keyword → embeddings → Claude Haiku
-   │ (6 domains)  │
+   │ (with cache) │
    └──────┬───────┘
           ▼
    ┌──────────────┐       ┌────────────────┐
    │  KPI Store   │──────▶│ Live Dashboard │
-   │ (Postgres or │       │ WebSocket+SSE  │
+   │ (Postgres/   │       │ WebSocket+SSE  │
    │  SQLite)     │       └────────────────┘
-   └──────────────┘
+   └──────┬───────┘               ▲
+          │                        │
+          └───────────────────────┘
+         (Optional: pgvector cache + DuckDB analytics)
 ```
 
 ## n8n Integration
@@ -68,7 +73,11 @@ uvicorn api:app --port 8004
 ```bash
 # In n8n: Workflows → Import from File
 ls connectors/n8n/workflows/
-# auction_aggregator_demo.json  csv_batch_ingest_demo.json  http_api_sync_demo.json
+# auction_aggregator.json - multi-source auction listing aggregator
+# invoice_intake.json - Gmail-attachment → DocIntel → StreamPulse pipeline
+# crm_sync.json - Sheet/CRM → KPI stream synchronization
+# uptime_alert.json - scheduled uptime check → email alert
+# master_trigger.json - scheduled harness that exercises other workflows
 ```
 
 ## Tests
@@ -85,6 +94,8 @@ StreamPulse provides research-proof event streaming standards:
 - **Dynamic Sliding-Window Context Assembly**: Continuous temporal sliding window $W_\tau(t)$ maintenance for real-time streaming RAG context generation.
 - **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load ($>250k\text{ events/sec}$).
 - **Isolated Storage Architecture**: Separate dedicated PostgreSQL database instance (`sp_` prefixed schemas).
+- **Content Hash Caching**: SHA-256 based classification result caching for performance optimization.
+- **Hybrid Classification Analysis**: Comparative study of keyword vs embedding vs LLM classification accuracy and latency.
 
 For theoretical proofs and latency analysis, see [RESEARCH.md](RESEARCH.md).
 
