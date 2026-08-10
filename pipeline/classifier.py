@@ -16,6 +16,8 @@ FEATURES:
 from __future__ import annotations
 
 import asyncio
+import hashlib
+import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -42,6 +44,50 @@ except ImportError:
 
 log = get_logger(__name__)
 
+# ════════════════════════════════════════════════════════════════════════════
+# CLASSIFICATION CACHE (Content Hash Caching)
+# ════════════════════════════════════════════════════════════════════════════
+
+_classification_cache: Dict[str, Dict[str, Any]] = {}
+_cache_hits = 0
+_cache_misses = 0
+
+def _content_hash(content: str) -> str:
+    """Generate SHA-256 hash of content for caching."""
+    return hashlib.sha256(content.encode('utf-8')).hexdigest()
+
+def _get_cached_classification(content: str) -> Optional[Dict[str, Any]]:
+    """Retrieve cached classification if available."""
+    if not settings.CLASSIFIER_ENABLE_CACHE:
+        return None
+    
+    content_hash = _content_hash(content)
+    if content_hash in _classification_cache:
+        global _cache_hits
+        _cache_hits += 1
+        return _classification_cache[content_hash]
+    return None
+
+def _cache_classification(content: str, result: Dict[str, Any]) -> None:
+    """Cache classification result."""
+    if not settings.CLASSIFIER_ENABLE_CACHE:
+        return
+    
+    content_hash = _content_hash(content)
+    _classification_cache[content_hash] = result
+    global _cache_misses
+    _cache_misses += 1
+
+def get_cache_stats() -> Dict[str, Any]:
+    """Get cache performance statistics."""
+    total = _cache_hits + _cache_misses
+    hit_rate = _cache_hits / total if total > 0 else 0.0
+    return {
+        "cache_hits": _cache_hits,
+        "cache_misses": _cache_misses,
+        "hit_rate": round(hit_rate, 3),
+        "cache_size": len(_classification_cache)
+    }
 
 # ════════════════════════════════════════════════════════════════════════════
 # DOMAIN ROUTING & CLASSIFICATION
@@ -500,15 +546,25 @@ async def get_realtime_pipeline() -> RealtimePipeline:
 
 def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     """Hybrid domain classifier: fast keyword pass, vector embedding fallback, and LLM escalation.
-    Tier 1: Fast Keyword matching
-    Tier 2: Vector embedding similarity vs domain prototypes (BAAI/bge-large-en-v1.5)
-    Tier 3: Zero-shot classification via Claude Haiku 4.5
+    Tier 1: Fast Keyword matching (uses CLASSIFIER_KEYWORD_THRESHOLD)
+    Tier 2: Vector embedding similarity vs domain prototypes (uses CLASSIFIER_EMBEDDING_THRESHOLD)
+    Tier 3: Zero-shot classification via Claude Haiku 4.5 (uses CLASSIFIER_LLM_CONFIDENCE)
+    Includes content hash caching for performance optimization.
     """
+    # Check cache first
+    cached = _get_cached_classification(content or "")
+    if cached:
+        return cached
+    
+    # Tier 1: Fast Keyword matching
     domain, conf = DomainClassifier.classify(content or "")
-    if fast_only or conf >= 0.5:
-        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    if fast_only or conf >= settings.CLASSIFIER_KEYWORD_THRESHOLD:
+        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+        _cache_classification(content, result)
+        return result
 
-    if os.getenv("STREAMPULSE_HYBRID_LLM") == "1":
+    # Tier 2: Vector embedding similarity
+    if settings.STREAMPULSE_HYBRID_LLM == "1":
         try:
             # Use the inference adapter for BGE embeddings (supports Orchestrator/Cohere/Jina)
             import sys
@@ -528,7 +584,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 "general company update news announcement",
             ]
             inputs = [content[:500]] + prototypes
-            embeddings = _embed(inputs, model=os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-large-en-v1.5"))
+            embeddings = _embed(inputs, model=settings.STREAMPULSE_EMBED_MODEL)
             if embeddings and len(embeddings) == len(inputs):
                 content_emb = embeddings[0]
                 proto_embs = embeddings[1:]
@@ -549,13 +605,17 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                         if score > best_score:
                             best_score = score
                             best_domain = domains[idx]
-                if best_score >= 0.5:
-                    return {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
+                if best_score >= settings.CLASSIFIER_EMBEDDING_THRESHOLD:
+                    result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
+                    _cache_classification(content, result)
+                    return result
         except Exception as e:
             log.warning("Embedding classification failed: %s", e)
 
-    if os.getenv("STREAMPULSE_HYBRID_LLM") != "1":
-        return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
+    if settings.STREAMPULSE_HYBRID_LLM != "1":
+        result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
+        _cache_classification(content, result)
+        return result
 
     # Tier 3: Zero-shot classification via LLM (Claude Haiku or Gemini)
     try:
@@ -575,11 +635,15 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         )
         label = (resp.choices[0].message.content or "").strip()
         if label in labels:
-            return {"domain": label, "confidence": 0.7, "method": "llm"}
+            result = {"domain": label, "confidence": settings.CLASSIFIER_LLM_CONFIDENCE, "method": "llm"}
+            _cache_classification(content, result)
+            return result
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
 
-    return {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
+    _cache_classification(content, result)
+    return result
 
 
 __all__ = [
@@ -589,4 +653,8 @@ __all__ = [
     "DataValidator",
     "classify",
     "get_realtime_pipeline",
+    "get_cache_stats",
+    "_content_hash",
+    "_get_cached_classification",
+    "_cache_classification",
 ]
