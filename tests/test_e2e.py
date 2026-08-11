@@ -23,7 +23,10 @@ async def test_e2e_streampulse_webhook_classification():
             response = await ac.post("/webhook/github", json=payload, headers=HEADERS)
             assert response.status_code == 200
             data = response.json()
-            # The text should be classified into Finance or Engineering
+            # The webhook response doesn't expose per-record classification (that's
+            # visible via /pipeline/history), so this confirms the payload was
+            # actually accepted and stored rather than silently dropped.
+            assert data["records_inserted"] == 1
 
 @pytest.mark.asyncio
 async def test_e2e_streampulse_n8n_sync_trigger():

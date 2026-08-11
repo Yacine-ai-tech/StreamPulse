@@ -7,8 +7,6 @@ dynamic sliding-window context assembly latency, and backpressure stability.
 Usage:
     python3 eval/run_benchmarks.py --seed 42
 """
-import sys
-import os
 import time
 import json
 import random
@@ -19,9 +17,9 @@ STREAMPULSE_ROOT = Path(__file__).resolve().parents[1]
 
 def run_streampulse_benchmarks(seed: int = 42):
     random.seed(seed)
-    print(f"==================================================")
+    print("==================================================")
     print(f"🔬 StreamPulse Research Benchmark Suite (Seed: {seed})")
-    print(f"==================================================")
+    print("==================================================")
 
     results = {
         "benchmark": "StreamPulse Event-Driven Streaming Pipeline & Sliding-Window Audit",

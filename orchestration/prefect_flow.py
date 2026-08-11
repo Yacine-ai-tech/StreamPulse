@@ -3,7 +3,6 @@ StreamPulse Prefect 3 flow — retried, observable, schedulable.
 """
 from __future__ import annotations
 
-import os
 from typing import Any, Dict, List
 
 try:
