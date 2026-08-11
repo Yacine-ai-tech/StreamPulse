@@ -2,18 +2,15 @@
 DuckDB analytics engine for StreamPulse.
 
 This module provides OLAP-style analytics queries using DuckDB for high-performance
-analytical processing of StreamPulse data.
-
-NOT PRODUCTION-VERIFIED — inert unless ENABLE_DUCKDB=true (off by default).
-Known issues before relying on this: get_stats() calls pg_database_size(), a
-PostgreSQL function DuckDB doesn't have; refresh_materialized_views()'s
-ON CONFLICT clause needs a UNIQUE/PRIMARY KEY on (summary_date, domain) that
-domain_summary's CREATE TABLE doesn't declare; import_from_postgres()'s default
-query reads FROM kpi_metrics, but the shared production Postgres schema uses
-sp_kpi_metrics-prefixed table names. Fix these before flipping ENABLE_DUCKDB on.
+analytical processing of StreamPulse data. Inert unless ENABLE_DUCKDB=true (off by
+default) -- exercised end-to-end (including a live import_from_postgres() against
+the real shared Postgres) on 2026-08-10; every method returns real data.
+import_from_postgres() requires DuckDB's postgres extension, which is downloaded
+on first use (INSTALL postgres) -- that needs outbound network access once.
 """
 from __future__ import annotations
 
+import os
 import duckdb
 from typing import Any, Dict, List, Optional
 from datetime import datetime, timedelta
@@ -71,9 +68,10 @@ class AnalyticsEngine:
                     domain VARCHAR(50),
                     record_count INTEGER,
                     avg_confidence DOUBLE,
-                    method_distribution JSONB,
-                    top_metrics JSONB,
-                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+                    method_distribution JSON,
+                    top_metrics JSON,
+                    updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+                    UNIQUE (summary_date, domain)
                 )
             """)
             
@@ -97,39 +95,60 @@ class AnalyticsEngine:
             self._enabled = False
 
     def import_from_postgres(self, query: str = None) -> int:
-        """Import data from PostgreSQL into DuckDB for analytics."""
+        """Import data from PostgreSQL's sp_kpi_metrics into DuckDB for analytics,
+        via DuckDB's postgres scanner extension (attached read-only, detached after)."""
         if not self._enabled or not self._conn:
             return 0
-            
+
+        pg_url = (getattr(settings, "POSTGRES_URL", "") or "").strip()
+        if not pg_url:
+            log.warning("import_from_postgres: POSTGRES_URL not set, nothing to import")
+            return 0
+
         try:
-            # Default query to import recent classified records
-            if query is None:
-                query = """
-                    SELECT 
-                        id, source, domain, metric_name, metric_value, 
-                        confidence, timestamp as ingestion_timestamp,
-                        CURRENT_TIMESTAMP as timestamp,
-                        'imported' as classification_method,
-                        '{}'::json as metadata
-                    FROM kpi_metrics 
-                    WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '30 days'
-                """
-            
-            # Import using duckdb's postgres scanner
-            import_query = f"""
-                INSERT INTO analytics.classified_records
-                {query}
-            """
-            
-            self._conn.execute(import_query)
-            
-            # Get row count
-            result = self._conn.execute("SELECT COUNT(*) FROM analytics.classified_records")
-            count = result.fetchone()[0]
-            
-            log.info("Imported %d records from PostgreSQL to DuckDB", count)
-            return count
-            
+            self._conn.execute("INSTALL postgres")
+            self._conn.execute("LOAD postgres")
+            # pg_url comes from our own settings, not user input -- same trust level as
+            # the INTERVAL '{days} days' f-strings already used elsewhere in this class.
+            self._conn.execute(f"ATTACH '{pg_url}' AS pg_source (TYPE POSTGRES, READ_ONLY)")
+            try:
+                # Default query: sp_kpi_metrics is the real shared-Postgres table name
+                # (see store.py) -- "kpi_metrics" (unprefixed) belongs to the platform's
+                # own seed data, not StreamPulse's.
+                if query is None:
+                    # created_at is stored as TEXT (ISO-8601, see store.py) on the
+                    # Postgres side, not a real TIMESTAMP column -- needs an explicit
+                    # cast before it can be compared to CURRENT_TIMESTAMP.
+                    query = """
+                        SELECT
+                            id, source, category AS domain, metric AS metric_name, value AS metric_value,
+                            confidence, CAST(created_at AS TIMESTAMP) AS ingestion_timestamp,
+                            CURRENT_TIMESTAMP AS timestamp,
+                            'imported' AS classification_method,
+                            '{}'::JSON AS metadata
+                        FROM pg_source.sp_kpi_metrics
+                        WHERE CAST(created_at AS TIMESTAMP) > CURRENT_TIMESTAMP - INTERVAL '30 days'
+                    """
+
+                # OR REPLACE keeps this safely re-runnable on the same rows (id is the
+                # DuckDB-side primary key) instead of failing on a second import.
+                # Explicit column list -- relying on positional order between this
+                # SELECT and the table's declared column order is what caused the
+                # classification_method/timestamp/ingestion_timestamp values to land
+                # in each other's columns previously.
+                self._conn.execute(f"""
+                    INSERT OR REPLACE INTO analytics.classified_records
+                        (id, source, domain, metric_name, metric_value, confidence,
+                         ingestion_timestamp, timestamp, classification_method, metadata)
+                    {query}
+                """)
+
+                count = self._conn.execute("SELECT COUNT(*) FROM analytics.classified_records").fetchone()[0]
+                log.info("Imported from PostgreSQL; classified_records now has %d rows", count)
+                return count
+            finally:
+                self._conn.execute("DETACH pg_source")
+
         except Exception as e:
             log.error("Failed to import from PostgreSQL: %s", e)
             return 0
@@ -225,26 +244,56 @@ class AnalyticsEngine:
             return False
             
         try:
-            # Update domain summary
+            # DuckDB's ON CONFLICT ... DO UPDATE SET rejects a bare CURRENT_TIMESTAMP
+            # on the right-hand side (misbinds it as a column reference), so this
+            # refresh clears today's row first and re-inserts rather than upserting.
+            self._conn.execute("DELETE FROM analytics.domain_summary WHERE summary_date = CURRENT_DATE")
+
+            # Update domain summary. json_group_object(col, COUNT(*)) can't nest an
+            # aggregate inside an aggregate directly, so the per-(domain, method) and
+            # per-(domain, metric) counts are computed in their own GROUP BY first,
+            # then re-aggregated into JSON per domain.
             self._conn.execute("""
                 INSERT INTO analytics.domain_summary
-                SELECT 
-                    CURRENT_DATE as summary_date,
-                    domain,
-                    COUNT(*) as record_count,
-                    AVG(confidence) as avg_confidence,
-                    json_group_object(classification_method, COUNT(*)) as method_distribution,
-                    json_group_object(metric_name, COUNT(*)) as top_metrics
-                FROM analytics.classified_records
-                WHERE DATE(timestamp) = CURRENT_DATE
-                GROUP BY domain
-                ON CONFLICT (summary_date, domain) 
-                DO UPDATE SET 
-                    record_count = EXCLUDED.record_count,
-                    avg_confidence = EXCLUDED.avg_confidence,
-                    method_distribution = EXCLUDED.method_distribution,
-                    top_metrics = EXCLUDED.top_metrics,
-                    updated_at = CURRENT_TIMESTAMP
+                    (summary_date, domain, record_count, avg_confidence, method_distribution, top_metrics)
+                WITH method_counts AS (
+                    SELECT domain, classification_method, COUNT(*) AS cnt
+                    FROM analytics.classified_records
+                    WHERE DATE(timestamp) = CURRENT_DATE
+                    GROUP BY domain, classification_method
+                ),
+                metric_counts AS (
+                    SELECT domain, metric_name, COUNT(*) AS cnt
+                    FROM analytics.classified_records
+                    WHERE DATE(timestamp) = CURRENT_DATE
+                    GROUP BY domain, metric_name
+                ),
+                method_json AS (
+                    SELECT domain, json_group_object(classification_method, cnt) AS method_distribution
+                    FROM method_counts
+                    GROUP BY domain
+                ),
+                metric_json AS (
+                    SELECT domain, json_group_object(metric_name, cnt) AS top_metrics
+                    FROM metric_counts
+                    GROUP BY domain
+                ),
+                totals AS (
+                    SELECT domain, COUNT(*) AS record_count, AVG(confidence) AS avg_confidence
+                    FROM analytics.classified_records
+                    WHERE DATE(timestamp) = CURRENT_DATE
+                    GROUP BY domain
+                )
+                SELECT
+                    CURRENT_DATE AS summary_date,
+                    t.domain,
+                    t.record_count,
+                    t.avg_confidence,
+                    m.method_distribution,
+                    mt.top_metrics
+                FROM totals t
+                JOIN method_json m ON m.domain = t.domain
+                JOIN metric_json mt ON mt.domain = t.domain
             """)
             
             log.info("Materialized views refreshed successfully")
@@ -263,13 +312,18 @@ class AnalyticsEngine:
             # Get table sizes
             classified_count = self._conn.execute("SELECT COUNT(*) FROM analytics.classified_records").fetchone()[0]
             summary_count = self._conn.execute("SELECT COUNT(*) FROM analytics.domain_summary").fetchone()[0]
-            
-            # Get database size
-            db_size = self._conn.execute("SELECT pg_database_size('analytics')").fetchone()[0]
-            
+
+            # DuckDB has no pg_database_size() (that's Postgres) — the on-disk file size
+            # is the DuckDB-native equivalent.
+            try:
+                db_size_bytes = os.path.getsize(self._db_path)
+            except OSError:
+                db_size_bytes = None
+
             return {
                 "enabled": True,
                 "db_path": self._db_path,
+                "db_size_bytes": db_size_bytes,
                 "classified_records": classified_count,
                 "domain_summaries": summary_count,
                 "storage_backend": "duckdb"
