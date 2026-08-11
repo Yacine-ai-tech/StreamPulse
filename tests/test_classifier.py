@@ -13,10 +13,13 @@ def test_keyword_classification_finance():
 
 
 def test_classify_module_returns_dict():
-    out = classify("headcount turnover and employee engagement")
+    # Dense enough in People keywords (7 matches / confidence=0.7) to clear
+    # CLASSIFIER_KEYWORD_THRESHOLD on Tier 1 alone, keeping this test offline
+    # (no embedding model load, no LLM call) per the module docstring.
+    out = classify("headcount turnover engagement salary training recruitment retention")
     assert out["domain"] == "People"
     assert 0 <= out["confidence"] <= 1
-    assert out["method"] in ("keyword", "keyword_low_conf")  # no LLM escalation unless STREAMPULSE_HYBRID_LLM=1
+    assert out["method"] == "keyword"
 
 
 def test_classify_unknown_is_general():
