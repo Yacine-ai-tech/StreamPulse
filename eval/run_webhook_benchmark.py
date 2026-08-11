@@ -40,11 +40,11 @@ async def benchmark_webhooks(n=100, concurrency=10):
             tasks.append(send(body, sig))
             
             if len(tasks) >= concurrency:
-                results = await asyncio.gather(*tasks)
+                await asyncio.gather(*tasks)
                 tasks = []
-                
+
         if tasks:
-            results = await asyncio.gather(*tasks)
+            await asyncio.gather(*tasks)
 
         end_time = time.time()
         
