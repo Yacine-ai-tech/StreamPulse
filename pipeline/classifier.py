@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
-import json
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -583,6 +582,24 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
 
     # Tier 2: Vector embedding similarity
     if settings.STREAMPULSE_HYBRID_LLM == "1":
+        content_hash = _content_hash(content or "")
+
+        # Persistent pgvector cache (separate from the in-memory _classification_cache
+        # above, which is per-process and cleared on restart). Optional -- gated by
+        # ENABLE_PGVECTOR, same as the rest of the storage/ package.
+        pg_cache = None
+        if settings.ENABLE_PGVECTOR:
+            try:
+                from storage import get_vector_cache
+                pg_cache = get_vector_cache()
+                cached_pg = pg_cache.get(content_hash)
+                if cached_pg:
+                    _cache_classification(content, cached_pg)
+                    return cached_pg
+            except Exception as e:
+                log.warning("pgvector cache lookup failed: %s", e)
+                pg_cache = None
+
         try:
             domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
             prototypes = [
@@ -618,6 +635,11 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 if best_score >= settings.CLASSIFIER_EMBEDDING_THRESHOLD:
                     result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
                     _cache_classification(content, result)
+                    if pg_cache is not None:
+                        try:
+                            pg_cache.set(content_hash, content or "", content_emb, result)
+                        except Exception as e:
+                            log.warning("pgvector cache write failed: %s", e)
                     return result
         except Exception as e:
             log.warning("Embedding classification failed: %s", e)
