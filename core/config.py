@@ -32,7 +32,7 @@ class Settings:
     if not WEBHOOK_SECRET and os.getenv("ENV") == "production":
         raise ValueError("WEBHOOK_SECRET must be set in production")
 
-    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "http://localhost:8000")
+    DOCINTEL_URL = os.getenv("DOCINTEL_URL", "http://localhost:8001")
 
     CORS_ALLOWED_ORIGINS = [
         o.strip() for o in os.getenv("CORS_ALLOWED_ORIGINS", "*").split(",")
@@ -55,7 +55,7 @@ class Settings:
     CLASSIFIER_LLM_CONFIDENCE = float(os.getenv("CLASSIFIER_LLM_CONFIDENCE", "0.7"))
     CLASSIFIER_ENABLE_CACHE = os.getenv("CLASSIFIER_ENABLE_CACHE", "true").lower() in ("1", "true", "yes")
     STREAMPULSE_HYBRID_LLM = os.getenv("STREAMPULSE_HYBRID_LLM", "1")
-    STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-m3")
+    STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
 
     # ── Storage Configuration ───────────────────────────────────────────
     ENABLE_PGVECTOR = os.getenv("ENABLE_PGVECTOR", "false").lower() in ("1", "true", "yes")

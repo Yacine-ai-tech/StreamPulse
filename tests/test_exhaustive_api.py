@@ -1,3 +1,5 @@
+import asyncio
+import contextlib
 import pytest
 import httpx
 import os
@@ -88,11 +90,26 @@ async def test_e2e_api_get__pipeline_history_9():
 
 @pytest.mark.asyncio
 async def test_e2e_api_get__live_sse_10():
-    # SSE streaming endpoint test using streaming client context
-    try:
+    # SSE streams never end on their own (while True + is_disconnected() check), and
+    # httpx's in-process ASGITransport never delivers the "client disconnected" ASGI
+    # message the way a real uvicorn socket would -- so relying on the client-side
+    # per-request timeout to unwind ac.stream()'s context manager hangs the whole
+    # suite (Starlette's StreamingResponse keeps its body-producing task alive
+    # waiting on a disconnect signal that will never arrive over ASGITransport).
+    # Bound the whole attempt explicitly and treat "didn't finish" as the expected
+    # outcome for an endpoint that's supposed to stream forever.
+    async def _open_and_read_one_chunk():
         async with get_client() as ac:
-            async with ac.stream("GET", f"{BASE_URL}/live/sse", headers=HEADERS, timeout=2.0) as response:
+            async with ac.stream("GET", f"{BASE_URL}/live/sse", headers=HEADERS) as response:
                 assert response.status_code in (200, 400, 401, 403, 404, 405, 422)
-    except (httpx.ReadTimeout, httpx.ConnectTimeout):
-        pass
+                async for _ in response.aiter_bytes():
+                    break
+
+    task = asyncio.ensure_future(_open_and_read_one_chunk())
+    try:
+        await asyncio.wait_for(asyncio.shield(task), timeout=3.0)
+    except (asyncio.TimeoutError, httpx.ReadTimeout, httpx.ConnectTimeout):
+        task.cancel()
+        with contextlib.suppress(asyncio.CancelledError, Exception):
+            await task
 
