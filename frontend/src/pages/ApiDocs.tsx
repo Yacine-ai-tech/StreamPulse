@@ -18,7 +18,7 @@ type Snippets = { curl: string; python: string; node: string };
 interface Endpoint {
   method: "GET" | "POST" | "WS";
   path: string;
-  category: "General" | "Ingestion" | "Webhooks" | "Pipeline" | "Live Streaming";
+  category: "General" | "Ingestion" | "Webhooks" | "Pipeline" | "Live Streaming" | "Analytics";
   auth: string;
   desc: string;
   note?: string;
@@ -30,7 +30,7 @@ interface Endpoint {
   snippets: Snippets;
 }
 
-const CATEGORIES: Endpoint["category"][] = ["General", "Ingestion", "Webhooks", "Pipeline", "Live Streaming"];
+const CATEGORIES: Endpoint["category"][] = ["General", "Ingestion", "Webhooks", "Pipeline", "Live Streaming", "Analytics"];
 
 const ENDPOINTS: Endpoint[] = [
   {
@@ -314,6 +314,82 @@ const ENDPOINTS: Endpoint[] = [
       node: `const es = new EventSource("${BASE_URL}/live/sse?session_id=demo-123");\nes.onmessage = (e) => console.log(JSON.parse(e.data));`,
     },
   },
+  {
+    method: "GET",
+    path: "/analytics/cache-stats",
+    category: "Analytics",
+    auth: "Public",
+    desc: "Classifier content-hash cache performance — hit/miss counts and hit rate, so you can see how much repeat traffic is skipping re-classification.",
+    body: null,
+    response: `{"cache_hits": 214, "cache_misses": 58, "hit_rate": 0.787}`,
+    snippets: {
+      curl: `curl "${BASE_URL}/analytics/cache-stats"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/analytics/cache-stats")\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/analytics/cache-stats");\nconsole.log(await res.json());`,
+    },
+  },
+  {
+    method: "GET",
+    path: "/analytics/storage-stats",
+    category: "Analytics",
+    auth: "Public",
+    desc: "Optional-storage introspection: pgvector embedding-cache and DuckDB analytics-engine stats.",
+    note: "Returns {\"storage_available\": false} unless the optional storage module is installed and ENABLE_PGVECTOR / ENABLE_DUCKDB are set — both default to false, so a fresh install reports this until you opt in.",
+    body: null,
+    response: `{"vector_cache": {"entries": 412}, "analytics": {"rows": 9800, "db_path": "streampulse_analytics.duckdb"}}`,
+    snippets: {
+      curl: `curl "${BASE_URL}/analytics/storage-stats"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/analytics/storage-stats")\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/analytics/storage-stats");\nconsole.log(await res.json());`,
+    },
+  },
+  {
+    method: "GET",
+    path: "/analytics/domain-summary",
+    category: "Analytics",
+    auth: "Public",
+    desc: "Domain-level rollup (record counts, avg confidence) over a trailing window, computed by the DuckDB analytics engine.",
+    note: "Requires ENABLE_DUCKDB=true — returns {\"error\": \"Storage backend not available\"} otherwise. This is a deeper server-side aggregate than the Analytics page's client-side \"records by source\" chart, which only reads the last 250 /pipeline/history rows.",
+    query: [{ name: "days", desc: "Trailing window size in days. Defaults to 7." }],
+    body: null,
+    response: `{"data": [{"domain": "Finance", "records": 412, "avg_confidence": 0.83}], "count": 6, "period_days": 7}`,
+    snippets: {
+      curl: `curl "${BASE_URL}/analytics/domain-summary?days=7"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/analytics/domain-summary", params={"days": 7})\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/analytics/domain-summary?days=7");\nconsole.log(await res.json());`,
+    },
+  },
+  {
+    method: "GET",
+    path: "/analytics/classification-trends",
+    category: "Analytics",
+    auth: "Public",
+    desc: "Classification method mix over time (keyword vs vector_embedding vs llm) from the DuckDB analytics engine — useful for watching how often the pipeline escalates past the fast keyword tier.",
+    note: "Requires ENABLE_DUCKDB=true — returns {\"error\": \"Storage backend not available\"} otherwise.",
+    query: [{ name: "days", desc: "Trailing window size in days. Defaults to 7." }],
+    body: null,
+    response: `{"data": [{"date": "2026-08-09", "method": "keyword", "count": 340}], "count": 21, "period_days": 7}`,
+    snippets: {
+      curl: `curl "${BASE_URL}/analytics/classification-trends?days=7"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/analytics/classification-trends", params={"days": 7})\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/analytics/classification-trends?days=7");\nconsole.log(await res.json());`,
+    },
+  },
+  {
+    method: "POST",
+    path: "/analytics/refresh",
+    category: "Analytics",
+    auth: "Public",
+    desc: "Force the DuckDB analytics engine to re-sync from the primary store instead of waiting for its normal refresh interval.",
+    note: "Requires ENABLE_DUCKDB=true — no-ops otherwise.",
+    body: null,
+    response: `{"status": "refreshed", "rows": 9800}`,
+    snippets: {
+      curl: `curl -X POST "${BASE_URL}/analytics/refresh"`,
+      python: `import requests\n\nresp = requests.post("${BASE_URL}/analytics/refresh")\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/analytics/refresh", { method: "POST" });\nconsole.log(await res.json());`,
+    },
+  },
 ];
 
 function CopyBtn({ text }: { text: string }) {
@@ -355,7 +431,7 @@ export default function ApiDocs() {
         <div>
           <h1 style={{ fontSize: "1.5rem", fontWeight: 700, margin: 0 }}>StreamPulse API Reference</h1>
           <p style={{ margin: 0, fontSize: "0.85rem", color: "#94a3b8" }}>
-            Ingest, classify, and stream real-time business data from any source — 12 endpoints across ingestion, signed webhooks, pipeline control, and live streaming.
+            Ingest, classify, and stream real-time business data from any source — 17 endpoints across ingestion, signed webhooks, pipeline control, live streaming, and analytics.
           </p>
         </div>
       </div>
@@ -365,7 +441,7 @@ export default function ApiDocs() {
           { icon: Globe, label: "Base URL", value: BASE_URL, color: "#38bdf8" },
           { icon: Shield, label: "Webhook auth", value: "HMAC-SHA256 (X-Signature-256)", color: "#4ade80" },
           { icon: Zap, label: "Transport", value: "REST + WebSocket + SSE", color: "#f59e0b" },
-          { icon: BookOpen, label: "Endpoints", value: "12", color: "#a78bfa" },
+          { icon: BookOpen, label: "Endpoints", value: String(ENDPOINTS.length), color: "#a78bfa" },
         ].map(({ icon: Icon, label, value, color }) => (
           <div key={label} style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.08)", borderRadius: 10, padding: "12px 16px", display: "flex", gap: 10, alignItems: "center" }}>
             <Icon size={18} color={color} />
@@ -481,7 +557,7 @@ export default function ApiDocs() {
             Every record passed to any ingestion or webhook route above runs through <code>pipeline/classifier.py</code>'s hybrid classifier before storage:
           </p>
           <ol style={{ fontSize: "0.8rem", color: "#94a3b8", lineHeight: 1.8, margin: 0, paddingLeft: 18 }}>
-            <li><strong style={{ color: "#e2e8f0" }}>Tier 1 — Keyword matching.</strong> Scores text against per-domain keyword lists (Finance, Growth, Operations, People, ESG, IT_Ops). Returns immediately if confidence ≥ 0.5. <code>method: "keyword"</code>.</li>
+            <li><strong style={{ color: "#e2e8f0" }}>Tier 1 — Keyword matching.</strong> Scores text against per-domain keyword lists (Finance, Growth, Operations, People, ESG, IT_Ops). Returns immediately if confidence ≥ 0.7 (<code>CLASSIFIER_KEYWORD_THRESHOLD</code>). <code>method: "keyword"</code>.</li>
             <li><strong style={{ color: "#e2e8f0" }}>Tier 2 — Vector embeddings.</strong> Gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-large-en-v1.5 by default) and cosine-matches it against 6 domain prototype sentences. Returns if similarity ≥ 0.5. <code>method: "vector_embedding"</code>.</li>
             <li><strong style={{ color: "#e2e8f0" }}>Tier 3 — LLM zero-shot escalation.</strong> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (<code>LLM_JUDGE</code>, Claude Haiku by default; falls back to Gemini Flash if only <code>GEMINI_API_KEY</code> is set) to pick one of the 6 labels. <code>method: "llm"</code>.</li>
           </ol>

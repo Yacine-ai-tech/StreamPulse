@@ -108,20 +108,44 @@ threading.Thread(target=_send_telemetry, daemon=True).start()
 # -------------------------
 
 
-@app.middleware("http")
-async def verify_internal_token(request: Request, call_next):
-    # Allow health checks, public auth routes, and frontend static assets
-    if request.method == "OPTIONS" or request.url.path in ["/", "/health", "/docs", "/openapi.json", "/api/redoc", "/favicon.png", "/favicon.ico", "/mark.png", "/logo.png"] or request.url.path.startswith("/api/v1/auth/") or request.url.path.startswith("/assets/") or request.url.path.startswith("/static/"):
-        return await call_next(request)
+class InternalTokenMiddleware:
+    """Pure-ASGI middleware (not BaseHTTPMiddleware) so it can sit in front of
+    StreamingResponse routes (/live/sse) without buffering/bridging their body
+    through an extra anyio task. BaseHTTPMiddleware's call_next() wraps the
+    downstream response in a task-group-bound task; a long-lived generator
+    response (SSE's `while True: yield ...`) makes that task never resolve
+    cleanly on early client disconnect, hanging the request. See
+    https://github.com/encode/starlette/discussions/1527 for the same class
+    of bug upstream — the fix is to not use @app.middleware("http") for
+    anything that guards a streaming route."""
 
-    token = request.headers.get("X-OmniIntel-Internal-Token")
-    expected_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+    EXEMPT_EXACT = {"/", "/health", "/docs", "/openapi.json", "/api/redoc",
+                     "/favicon.png", "/favicon.ico", "/mark.png", "/logo.png"}
+    EXEMPT_PREFIX = ("/api/v1/auth/", "/assets/", "/static/")
 
-    if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
-        return JSONResponse(status_code=403, content={"detail": "Missing or invalid X-OmniIntel-Internal-Token"})
+    def __init__(self, app):
+        self.app = app
 
-    return await call_next(request)
+    async def __call__(self, scope, receive, send):
+        if scope["type"] != "http":
+            return await self.app(scope, receive, send)
 
+        request = Request(scope, receive=receive)
+        path = request.url.path
+        if request.method == "OPTIONS" or path in self.EXEMPT_EXACT or path.startswith(self.EXEMPT_PREFIX):
+            return await self.app(scope, receive, send)
+
+        token = request.headers.get("X-OmniIntel-Internal-Token")
+        expected_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+
+        if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
+            response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-OmniIntel-Internal-Token"})
+            return await response(scope, receive, send)
+
+        return await self.app(scope, receive, send)
+
+
+app.add_middleware(InternalTokenMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
@@ -367,7 +391,12 @@ async def ingest_json(
     enriched = []
     for r in req.records:
         c = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
-        enriched.append({**r, **c})
+        # Batch-level req.source is the default provenance for every record in it
+        # (an explicit per-record "source" still wins) -- without this, sp_kpi_metrics
+        # rows end up with source=NULL even though sp_ingestion_log correctly recorded
+        # the batch's source, breaking anything that groups KPI data by source
+        # (get_source_performance(), /analytics/domain-summary's source_count).
+        enriched.append({"source": req.source, **r, **c})
     inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
     update_ingestion_log(log_id, "completed", records=inserted)
 
@@ -451,7 +480,14 @@ async def webhook_with_vision(
                         img_bytes = (await client.get(img_url)).content
                         files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
                         data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
-                        resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data)
+                        # Send the shared internal token if this deployment sets one — DocIntel's
+                        # own internal-token gate exempts /classify-image, but the header costs
+                        # nothing when unset and keeps this working if that exemption ever changes.
+                        vision_headers = {}
+                        internal_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+                        if internal_token:
+                            vision_headers["X-OmniIntel-Internal-Token"] = internal_token
+                        resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data, headers=vision_headers)
                         r["image_category"] = resp.json().get("category")
                         r["image_confidence"] = resp.json().get("confidence")
                     except Exception as e:
@@ -635,3 +671,24 @@ async def refresh_analytics() -> Dict[str, Any]:
     except Exception as e:
         log.error("Failed to refresh analytics: %s", e)
         return {"error": str(e), "success": False}
+
+
+@app.get("/{full_path:path}", include_in_schema=False)
+async def spa_fallback(full_path: str):
+    """Catch-all so direct navigation, refresh, or a bookmarked/shared link to
+    any frontend route (e.g. /analytics, /events, /api-docs) serves the SPA
+    instead of a raw 404 -- React Router then resolves the route client-side.
+    Declared last so every real API/WS route above still wins.
+
+    Real static files in frontend/dist/ (favicon, logo, sw.js, ...) are
+    served directly rather than falling back to index.html for them.
+    """
+    root = _os.path.dirname(__file__)
+    dist = _os.path.realpath(_os.path.join(root, "frontend", "dist"))
+    candidate = _os.path.realpath(_os.path.join(dist, full_path))
+    if candidate.startswith(dist + _os.sep) and _os.path.isfile(candidate):
+        return FileResponse(candidate)
+    spa = _os.path.join(dist, "index.html")
+    if _os.path.exists(spa):
+        return FileResponse(spa)
+    raise HTTPException(status_code=404, detail="Not Found")

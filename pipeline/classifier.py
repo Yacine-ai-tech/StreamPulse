@@ -45,6 +45,24 @@ except ImportError:
 log = get_logger(__name__)
 
 # ════════════════════════════════════════════════════════════════════════════
+# TIER 2 EMBEDDER (lazy-loaded sentence-transformers model, cached by name)
+# ════════════════════════════════════════════════════════════════════════════
+
+_embedder_cache: Dict[str, Any] = {}
+
+
+def _embed(inputs: List[str], model: str) -> List[List[float]]:
+    """Encode `inputs` with a local sentence-transformers model (BGE by default).
+    The model is loaded once per name and reused across calls."""
+    from sentence_transformers import SentenceTransformer
+
+    embedder = _embedder_cache.get(model)
+    if embedder is None:
+        embedder = SentenceTransformer(model)
+        _embedder_cache[model] = embedder
+    return embedder.encode(inputs).tolist()
+
+# ════════════════════════════════════════════════════════════════════════════
 # CLASSIFICATION CACHE (Content Hash Caching)
 # ════════════════════════════════════════════════════════════════════════════
 
@@ -566,14 +584,6 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     # Tier 2: Vector embedding similarity
     if settings.STREAMPULSE_HYBRID_LLM == "1":
         try:
-            # Use the inference adapter for BGE embeddings (supports Orchestrator/Cohere/Jina)
-            import sys
-            import os as _os
-            _svc_dir = _os.path.join(_os.path.dirname(_os.path.dirname(_os.path.abspath(__file__))), "services")
-            if _svc_dir not in sys.path:
-                sys.path.insert(0, _svc_dir)
-            from inference_adapter import embed as _embed  # type: ignore
-
             domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
             prototypes = [
                 "finance revenue profit margin cash flow ebitda",

@@ -3,8 +3,9 @@ StreamPulse slim store — KPI metrics + ingestion logs only.
 
 Dual backend, selected at import time:
   - PostgreSQL when POSTGRES_URL is set (production — durable across restarts/deploys).
-    Tables are prefixed ``sp_`` because the database is shared with other portfolio
-    services that own the unprefixed ``kpi_metrics`` seed data.
+    StreamPulse has its own dedicated Neon project (not shared with sibling services).
+    Tables keep the ``sp_`` prefix from when this database was multi-tenant; harmless
+    to keep, no longer required for isolation.
   - SQLite fallback otherwise (zero-infrastructure local runs).
 
 Chat, OCR, voice, OAuth, user functions are intentionally out of scope.
