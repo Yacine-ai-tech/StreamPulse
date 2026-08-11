@@ -8,7 +8,6 @@ from __future__ import annotations
 
 import json
 from typing import Any, Dict, List, Optional
-from datetime import datetime
 
 from core.config import settings
 from core.logger import get_logger
@@ -32,8 +31,7 @@ class VectorCache:
         """Initialize pgvector connection and schema."""
         try:
             import psycopg
-            from psycopg import sql
-            
+
             # Connect to PostgreSQL
             self._conn = psycopg.connect(settings.POSTGRES_URL)
             
@@ -98,8 +96,10 @@ class VectorCache:
                         WHERE content_hash = %s
                     """, (content_hash,))
                     self._conn.commit()
-                    
-                    return json.loads(result[0])
+
+                    # psycopg3 already deserializes JSONB columns to a dict --
+                    # json.loads() here previously crashed on every cache hit.
+                    return result[0]
                     
         except Exception as e:
             log.error("Failed to retrieve from pgvector cache: %s", e)
@@ -161,7 +161,7 @@ class VectorCache:
                     results.append({
                         "content_hash": row[0],
                         "content": row[1],
-                        "classification_result": json.loads(row[2]),
+                        "classification_result": row[2],
                         "similarity": float(row[3])
                     })
                 

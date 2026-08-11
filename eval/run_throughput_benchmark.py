@@ -5,7 +5,7 @@ import hashlib
 import json
 import random
 from pathlib import Path
-from typing import Dict, List
+from typing import Dict
 import httpx
 import psutil
 import os
@@ -92,7 +92,7 @@ class ThroughputBenchmark:
             self.results["response_times"].append(response_time)
             return response_time
             
-        except Exception as e:
+        except Exception:
             response_time = time.time() - start_time
             self.results["total_requests"] += 1
             self.results["failed"] += 1
@@ -101,7 +101,7 @@ class ThroughputBenchmark:
     
     async def run_concurrent_test(self, n_requests: int = 1000, concurrency: int = 50):
         """Run concurrent webhook load test"""
-        print(f"=== StreamPulse Throughput Benchmark ===")
+        print("=== StreamPulse Throughput Benchmark ===")
         print(f"Total requests: {n_requests}, Concurrency: {concurrency}")
         
         # Get initial memory usage
@@ -142,7 +142,7 @@ class ThroughputBenchmark:
         error_rate = (self.results["failed"] / self.results["total_requests"]) * 100 if self.results["total_requests"] > 0 else 0
         security_rate = (self.results["security_rejections"] / (self.results["security_rejections"] + self.results["failed"])) * 100 if (self.results["security_rejections"] + self.results["failed"]) > 0 else 0
         
-        print(f"\n=== Results ===")
+        print("\n=== Results ===")
         print(f"Total requests: {self.results['total_requests']}")
         print(f"Successful: {self.results['successful']}")
         print(f"Failed: {self.results['failed']}")
