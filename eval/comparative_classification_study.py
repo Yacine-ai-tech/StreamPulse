@@ -9,7 +9,7 @@ from __future__ import annotations
 
 import time
 import json
-from typing import Any, Dict, List
+from typing import Any, Dict
 from datetime import datetime
 import pandas as pd
 
@@ -188,7 +188,7 @@ def generate_report(results: Dict[str, Any]) -> str:
     
     # Cache performance
     cache_perf = results["statistics"]["cache_performance"]
-    report.append(f"\nCACHE PERFORMANCE:")
+    report.append("\nCACHE PERFORMANCE:")
     report.append(f"  Cache hits: {cache_perf['cache_hits']}")
     report.append(f"  Cache misses: {cache_perf['cache_misses']}")
     report.append(f"  Hit rate: {cache_perf['hit_rate']:.1%}")
@@ -236,12 +236,12 @@ def generate_report(results: Dict[str, Any]) -> str:
     if embedding_stats["count"] > 0:
         report.append(f"  ✅ Embedding fallback working ({embedding_stats['count']} samples)")
     else:
-        report.append(f"  ⚠️  Embedding fallback not triggered (all samples high confidence)")
+        report.append("  ⚠️  Embedding fallback not triggered (all samples high confidence)")
     
     if llm_stats["count"] > 0:
         report.append(f"  ✅ LLM escalation working ({llm_stats['count']} samples)")
     else:
-        report.append(f"  ℹ️  LLM escalation not needed (keyword/embedding sufficient)")
+        report.append("  ℹ️  LLM escalation not needed (keyword/embedding sufficient)")
     
     report.append("\n" + "=" * 80)
     

@@ -12,8 +12,7 @@ from __future__ import annotations
 
 import os
 import duckdb
-from typing import Any, Dict, List, Optional
-from datetime import datetime, timedelta
+from typing import Any, Dict, Optional
 import pandas as pd
 
 from core.config import settings
