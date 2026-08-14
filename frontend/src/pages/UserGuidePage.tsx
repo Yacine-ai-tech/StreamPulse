@@ -76,7 +76,7 @@ export default function UserGuidePage() {
           </p>
           <ol className="space-y-3 text-sm text-gray-300 list-decimal list-inside mb-4">
             <li><span className="font-semibold text-gray-100">Tier 1 — Keyword matching.</span> Scores text against per-domain keyword lists across 6 domains (Finance, Growth, Operations, People, ESG, IT_Ops). Returns immediately once confidence ≥ 0.5. Free, near-instant.</li>
-            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Opt-in via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-large-en-v1.5 by default) and compares it against 6 domain prototype sentences by cosine similarity.</li>
+            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Opt-in via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and compares it against 6 domain prototype sentences by cosine similarity.</li>
             <li><span className="font-semibold text-gray-100">Tier 3 — LLM zero-shot escalation.</span> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (Claude Haiku by default, via <code>LLM_JUDGE</code>) to pick one of the 6 labels when the earlier tiers aren't confident.</li>
           </ol>
 

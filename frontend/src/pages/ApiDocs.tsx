@@ -558,7 +558,7 @@ export default function ApiDocs() {
           </p>
           <ol style={{ fontSize: "0.8rem", color: "#94a3b8", lineHeight: 1.8, margin: 0, paddingLeft: 18 }}>
             <li><strong style={{ color: "#e2e8f0" }}>Tier 1 — Keyword matching.</strong> Scores text against per-domain keyword lists (Finance, Growth, Operations, People, ESG, IT_Ops). Returns immediately if confidence ≥ 0.7 (<code>CLASSIFIER_KEYWORD_THRESHOLD</code>). <code>method: "keyword"</code>.</li>
-            <li><strong style={{ color: "#e2e8f0" }}>Tier 2 — Vector embeddings.</strong> Gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-large-en-v1.5 by default) and cosine-matches it against 6 domain prototype sentences. Returns if similarity ≥ 0.5. <code>method: "vector_embedding"</code>.</li>
+            <li><strong style={{ color: "#e2e8f0" }}>Tier 2 — Vector embeddings.</strong> Gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and cosine-matches it against 6 domain prototype sentences. Returns if similarity ≥ 0.5. <code>method: "vector_embedding"</code>.</li>
             <li><strong style={{ color: "#e2e8f0" }}>Tier 3 — LLM zero-shot escalation.</strong> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (<code>LLM_JUDGE</code>, Claude Haiku by default; falls back to Gemini Flash if only <code>GEMINI_API_KEY</code> is set) to pick one of the 6 labels. <code>method: "llm"</code>.</li>
           </ol>
           <p style={{ fontSize: "0.75rem", color: "#64748b", lineHeight: 1.6, margin: "10px 0 0" }}>
