@@ -180,5 +180,5 @@ fallback that masked it completely.
 ## 9. Portfolio integration points
 
 - **DocIntel**: consumer, see §7.
-- **n8n-service**: StreamPulse ships importable workflow templates and a custom node for n8n to call *into* StreamPulse's webhook endpoints — StreamPulse doesn't call out to n8n. n8n-service itself now has its own dedicated database (`n8n-production`), separate from StreamPulse's.
+- **n8n**: StreamPulse ships importable workflow templates and a custom node for n8n to call *into* StreamPulse's webhook endpoints — StreamPulse doesn't call out to n8n.
 - **orchestrator**: no direct code-level integration found or built this session — StreamPulse doesn't currently call the orchestrator's Lightning Studio proxy for anything (it has no GPU-heavy inference step that would need it; the embedding tier runs locally per §5).
