@@ -1,8 +1,8 @@
-import base64
 """
 StreamPulse API — Real-time multi-source data pipeline.
 """
 from __future__ import annotations
+import base64
 import os as _os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
