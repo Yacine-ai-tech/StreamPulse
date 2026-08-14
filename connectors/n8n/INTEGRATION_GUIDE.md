@@ -35,12 +35,6 @@ These are **public templates** that users can import and customize:
 - ❌ No private credentials
 - ❌ No hardcoded API keys
 
-### Private (n8n-service Repository)
-- 🔒 Your personal n8n instance credentials
-- 🔒 Google OAuth credentials
-- 🔒 ClickUp API keys
-- 🔒 Email configuration
-- 🔒 Your specific workflow implementations
 
 ## Usage for External Users
 
@@ -120,8 +114,3 @@ For issues with the integration layer:
 - Check StreamPulse documentation: https://github.com/Yacine-ai-tech/StreamPulse
 - Review workflow template comments
 - Test with the provided examples first
-
-For your private n8n service:
-- See the n8n-service repository
-- Refer to your internal documentation
-- Contact your system administrator
