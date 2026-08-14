@@ -57,7 +57,7 @@ class Settings:
     STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-m3")
 
     # ── Remote Inference (for 512MB free tier constraint) ─────────────
-    INFERENCE_MODE = os.getenv("INFERENCE_MODE", "local").lower()
+    INFERENCE_MODE = os.getenv("INFERENCE_MODE", "remote").lower()
     EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", "https://api-inference.huggingface.co/models/" + STREAMPULSE_EMBED_MODEL)
     INFERENCE_TOKEN = os.getenv("INFERENCE_TOKEN", os.getenv("HF_TOKEN", ""))
 
