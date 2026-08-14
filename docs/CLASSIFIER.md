@@ -23,7 +23,7 @@ Incoming text/record
   [TIER 1] Keyword matching — fast regex, microseconds
        │ conf >= 0.5? → DONE (method: "keyword")
        │
-  [TIER 2] Vector embedding similarity — BGE-large-en-v1.5
+  [TIER 2] Vector embedding similarity — BGE-m3
        │ cosine vs 6 domain prototypes
        │ score >= 0.5? → DONE (method: "vector_embedding")
        │
@@ -75,5 +75,5 @@ Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `STREAMPULSE_HYBRID_LLM` | `0` | Set to `1` to enable Tiers 2 & 3 |
-| `STREAMPULSE_EMBED_MODEL` | `BAAI/bge-large-en-v1.5` | Embedding model for Tier 2 |
+| `STREAMPULSE_EMBED_MODEL` | `BAAI/bge-m3` | Embedding model for Tier 2 |
 | `LLM_JUDGE` | settings.LLM_JUDGE | LLM for Tier 3 |
