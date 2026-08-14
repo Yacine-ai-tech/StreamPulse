@@ -54,7 +54,7 @@ class Settings:
     CLASSIFIER_LLM_CONFIDENCE = float(os.getenv("CLASSIFIER_LLM_CONFIDENCE", "0.7"))
     CLASSIFIER_ENABLE_CACHE = os.getenv("CLASSIFIER_ENABLE_CACHE", "true").lower() in ("1", "true", "yes")
     STREAMPULSE_HYBRID_LLM = os.getenv("STREAMPULSE_HYBRID_LLM", "1")
-    STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-large-en-v1.5")
+    STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-m3")
 
     # ── Storage Configuration ───────────────────────────────────────────
     ENABLE_PGVECTOR = os.getenv("ENABLE_PGVECTOR", "false").lower() in ("1", "true", "yes")
