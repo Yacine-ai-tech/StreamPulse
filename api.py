@@ -381,7 +381,8 @@ async def ingest_json(
     log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id)
     enriched = []
     for r in req.records:
-        c = classify(r.get("metric", "") + " " + str(r.get("raw", "")))
+        text_to_classify = r.get("metric", "") + " " + str(r.get("raw", ""))
+        c = await asyncio.to_thread(classify, text_to_classify)
         # Batch-level req.source is the default provenance for every record in it
         # (an explicit per-record "source" still wins) -- without this, sp_kpi_metrics
         # rows end up with source=NULL even though sp_ingestion_log correctly recorded
