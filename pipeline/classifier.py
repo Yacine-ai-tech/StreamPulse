@@ -52,7 +52,42 @@ _embedder_cache: Dict[str, Any] = {}
 
 def _embed(inputs: List[str], model: str) -> List[List[float]]:
     """Encode `inputs` with a local sentence-transformers model (BGE by default).
-    The model is loaded once per name and reused across calls."""
+    The model is loaded once per name and reused across calls.
+    If INFERENCE_MODE is remote, calls the HF Inference API to avoid OOM."""
+    
+    if settings.INFERENCE_MODE == "remote":
+        url = settings.EMBEDDING_ENDPOINT
+        if url:
+            import httpx
+            import numpy as np
+            h = {"Content-Type": "application/json", "User-Agent": "StreamPulse/1.0"}
+            if settings.INFERENCE_TOKEN:
+                h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
+            
+            try:
+                # Use a larger timeout for the cold start
+                with httpx.Client(timeout=60.0) as client:
+                    if "huggingface.co" in url:
+                        resp = client.post(url, json={"inputs": inputs}, headers=h)
+                        resp.raise_for_status()
+                        
+                        data = resp.json()
+                        # Simple feature extraction might return 3D arrays
+                        arr = np.asarray(data, dtype=float)
+                        if arr.ndim == 3:
+                            arr = arr.mean(axis=1)
+                        return arr.tolist()
+                    else:
+                        payload = {"texts": inputs, "model": model}
+                        resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
+                        resp.raise_for_status()
+                        return resp.json()["embeddings"]
+            except Exception as e:
+                log.warning("Remote embedding failed: %s", e)
+                # Fall back to local if it fails? No, if we are on Render 512MB it will OOM.
+                # Just return an empty list or let it fail over.
+                return []
+
     from sentence_transformers import SentenceTransformer
 
     embedder = _embedder_cache.get(model)
