@@ -99,7 +99,7 @@ Routed in `frontend/src/App.tsx`, shared shell in `frontend/src/kit/AppShell.tsx
 | Layer | Provider | Configurable via |
 |---|---|---|
 | Fast classification | Keyword matching (160+ keywords, 6 domains) | n/a, always-on |
-| Embedding | `sentence-transformers`, `BAAI/bge-large-en-v1.5` default | `STREAMPULSE_EMBED_MODEL` |
+| Embedding | `sentence-transformers`, `BAAI/bge-m3` default | `STREAMPULSE_EMBED_MODEL` |
 | LLM escalation | Claude Haiku 4.5 (`LLM_JUDGE`), Gemini 2.5 Flash fallback | `LLM_JUDGE`, auto-fallback if only `GEMINI_API_KEY` set |
 | Multi-provider abstraction | LiteLLM | `LLM_DEFAULT`, `LLM_JUDGE` |
 
