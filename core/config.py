@@ -39,9 +39,8 @@ class Settings:
         if o.strip()
     ]
 
-    # ── n8n integration (Public Integration Layer Only) ───────────────
-    # These are for connecting TO an external n8n instance
-    # Actual n8n service credentials are in the separate n8n-service repository
+    # ── n8n integration ───────────────
+    # Note: These are for connecting TO an external n8n instance
     N8N_BASE_URL = os.getenv("N8N_BASE_URL", "")
     N8N_API_KEY = os.getenv("N8N_API_KEY", "")
 

@@ -575,7 +575,7 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
     return StreamingResponse(gen(), media_type="text/event-stream")
 
 
-# ── Analytics & Storage Endpoints (STRATEGY.md compliant) ───────────────────────
+# ── Analytics & Storage Endpoints ───────────────────────
 
 @app.get("/analytics/cache-stats")
 async def get_cache_stats() -> Dict[str, Any]:

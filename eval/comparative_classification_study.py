@@ -3,7 +3,7 @@ Comparative Classification Study: Keyword vs Embedding vs LLM
 
 This script performs a comparative analysis of the three classification methods
 in StreamPulse to evaluate accuracy, latency, and performance characteristics.
-Meets STRATEGY.md requirement for research artifact.
+Meets requirement for research artifact.
 """
 from __future__ import annotations
 

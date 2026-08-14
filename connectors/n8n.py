@@ -3,7 +3,7 @@ StreamPulse n8n Integration Layer (Public Integration Only)
 Agnostic webhook bridge and REST API wrapper for connecting StreamPulse to external n8n instances.
 
 This is the PUBLIC integration layer that allows users to connect their own n8n instances
-to StreamPulse. For the private n8n service with credentials, see the separate n8n-service repository.
+to StreamPulse.
 
 Users define workflows in their private n8n instance and push data to StreamPulse webhooks.
 """
