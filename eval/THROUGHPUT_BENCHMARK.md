@@ -3,6 +3,8 @@
 A stress test of StreamPulse's webhook ingestion pipeline under high load. Reproducible:
 `python eval/run_throughput_benchmark.py`
 
+*(Note on methodology: Production runs against serverless platforms (e.g., Render) often suffer from cold-start timeouts and connection errors during burst testing. The numbers below reflect a stable, warmed-up environment run from 2026-07-28.)*
+
 ## Setup
 - Load pattern: 1000 concurrent webhook requests
 - Payload size: ~2KB JSON (typical webhook payload)
