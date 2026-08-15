@@ -23,6 +23,10 @@ services:
         value: "1"
       - key: DOCINTEL_URL          # for /webhook/{src}/with-vision composition
         sync: false
+      - key: N8N_BASE_URL
+        sync: false
+      - key: N8N_API_KEY
+        sync: false
       - key: POSTGRES_URL          # dedicated PostgreSQL database for persistence (recommended for production)
         sync: false
       - key: CORS_ALLOWED_ORIGINS
