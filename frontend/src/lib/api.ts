@@ -139,6 +139,7 @@ export function openLive(
       } catch { }
     };
     es.onerror = () => { es?.close(); onState("down"); };
+  };
 
   const startWS = () => {
     if (closed) return;
