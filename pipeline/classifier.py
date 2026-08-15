@@ -84,7 +84,7 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                         return resp.json()["embeddings"]
             except Exception as e:
                 log.warning("Remote embedding failed: %s", e)
-                # Fall back to local if it fails? No, if we are on Render 512MB it will OOM.
+                # Do not fall back to local if it fails, to prevent OOM in memory-constrained environments.
                 # Just return an empty list or let it fail over.
                 return []
 
@@ -688,7 +688,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     try:
         from litellm import completion
         labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
-        # Use GEMINI as fallback if OpenAI/Anthropic are unavailable, as requested by user
+        # Fall back to Gemini Flash when no Anthropic/OpenAI key is configured
         model = settings.LLM_JUDGE
         if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
             model = "gemini/gemini-2.5-flash"

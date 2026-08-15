@@ -6,8 +6,8 @@ import os
 
 from api import app
 
-TOKEN = os.getenv('OMNIINTEL_INTERNAL_TOKEN', '')
-HEADERS = {'X-OmniIntel-Internal-Token': TOKEN}
+TOKEN = os.getenv('INTERNAL_TOKEN', '')
+HEADERS = {'X-Internal-Token': TOKEN}
 TEST_URL = os.getenv('TEST_BASE_URL')
 BASE_URL = TEST_URL or 'http://testserver'
 log_id = "test"

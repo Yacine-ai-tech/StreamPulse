@@ -39,7 +39,7 @@ export function ExecutionStages({
   );
 }
 
-/* ---------- WakingBackend — Render free tier cold-start state ---------- */
+/* ---------- WakingBackend — On-demand backend startup state ---------- */
 export function WakingBackend({ onRetry, waking }: { onRetry: () => void; waking: boolean }) {
   return (
     <div className="flex h-full min-h-[60vh] flex-col items-center justify-center gap-4 text-center">
@@ -50,7 +50,7 @@ export function WakingBackend({ onRetry, waking }: { onRetry: () => void; waking
         </div>
         <div className="mx-auto mt-1 max-w-xs text-[13px] text-muted">
           {waking
-            ? "Free-tier services sleep when idle. First start can take up to a minute."
+            ? "The backend sleeps when idle. First start can take up to a minute."
             : "Could not reach the API. It may still be starting."}
         </div>
       </div>

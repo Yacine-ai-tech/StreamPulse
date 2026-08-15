@@ -3,7 +3,6 @@
 
 **Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
 > 🔗 **Live dashboard:** https://streampulse.ysiddo-ai-projects.app/  ·  live stream at `/live/sse`.
-> On-demand backend (first request ~30–60 s to wake).
 > Self-hosting: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## What It Does
@@ -92,7 +91,7 @@ pytest tests/ -q
 
 StreamPulse provides research-proof event streaming standards:
 - **Dynamic Sliding-Window Context Assembly**: Continuous temporal sliding window $W_\tau(t)$ maintenance for real-time streaming RAG context generation.
-- **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load ($>250k\text{ events/sec}$).
+- **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load ($>500\text{ events/sec}$).
 - **Isolated Storage Architecture**: Separate dedicated PostgreSQL database instance (`sp_` prefixed schemas).
 - **Content Hash Caching**: SHA-256 based classification result caching for performance optimization.
 - **Hybrid Classification Analysis**: Comparative study of keyword vs embedding vs LLM classification accuracy and latency.
@@ -110,7 +109,3 @@ python3 eval/run_benchmarks.py --seed 42
 
 This project is open-source under the **AGPL-3.0 License**. Free for researchers, students, and open-source projects.
 Commercial license: see [COMMERCIAL.md](COMMERCIAL.md).
-
-
-
-![telemetry](https://gateway.ysiddo-ai-projects.app/pixel.png)
