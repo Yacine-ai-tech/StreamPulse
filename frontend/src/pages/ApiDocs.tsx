@@ -456,7 +456,7 @@ export default function ApiDocs() {
       <p style={{ fontSize: "0.78rem", color: "#64748b", margin: "0 0 20px", lineHeight: 1.6 }}>
         Note: if the deployment sets <code>REQUIRE_INTERNAL_TOKEN=true</code> (off by default), every route except <code>/</code>, <code>/health</code>,{" "}
         <code>/docs</code>, <code>/openapi.json</code>, <code>/api/redoc</code>, and static assets additionally requires an{" "}
-        <code>X-OmniIntel-Internal-Token</code> header. This is a service-mesh concern for internal callers — it's independent of the per-webhook
+        <code>X-Internal-Token</code> header. This is a service-mesh concern for internal callers — it's independent of the per-webhook
         HMAC signing below.
       </p>
 
