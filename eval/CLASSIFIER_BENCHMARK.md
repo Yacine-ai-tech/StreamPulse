@@ -11,7 +11,7 @@ money and kept more of it after bills" instead of "revenue/profit/ebitda"). This
 defeats naive keyword matching so the benchmark measures the **value of the LLM tier**, not a
 self-aligned keyword set.
 
-## Results (real run, 2026-06-17, 24 examples)
+## Results (real run, 2026-08-15, 24 examples)
 | Tier | Accuracy | Macro-F1 |
 |------|----------|----------|
 | Keyword only (Tier 1) | **0.083** | 0.105 |
