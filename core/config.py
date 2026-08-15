@@ -28,9 +28,9 @@ class Settings:
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
-    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET", "")
-    if not WEBHOOK_SECRET and os.getenv("ENV") == "production":
-        raise ValueError("WEBHOOK_SECRET must be set in production")
+    WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET") or __import__("secrets").token_hex(32)
+    if os.getenv("ENV") == "production" and not os.getenv("WEBHOOK_SECRET"):
+        raise ValueError("WEBHOOK_SECRET must be explicitly set in production")
 
     DOCINTEL_URL = os.getenv("DOCINTEL_URL", "http://localhost:8001")
 
