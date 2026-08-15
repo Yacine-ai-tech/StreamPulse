@@ -1,0 +1,114 @@
+2026-08-15 09:23:43,882 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:09,873 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:12,074 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:12,764 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:12,769 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:13,788 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:14,357 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:14,362 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:15,242 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:15,655 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:15,659 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:16,568 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:17,115 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:17,119 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:17,953 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:18,410 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:18,413 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:19,321 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:19,800 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:19,807 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:20,673 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:30,932 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:30,940 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:32,673 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:33,300 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:33,303 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:35,335 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:35,815 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:35,818 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:36,628 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:37,165 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:37,168 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:38,121 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:43,533 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:43,537 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:45,251 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:46,148 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:46,151 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:48,446 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:48,896 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:48,899 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:50,045 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:50,448 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:50,455 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:51,489 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:51,952 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:51,955 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:52,939 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:53,416 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:53,424 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:24:54,427 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:24:59,979 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:24:59,983 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:02,163 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:03,113 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:03,116 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:04,352 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:05,103 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:05,106 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:07,175 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:08,082 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:08,087 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:10,155 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:15,881 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:15,923 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:20,722 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:26,903 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:26,907 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:28,488 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+2026-08-15 09:25:29,110 [WARNING] pipeline.classifier: Remote embedding failed: [Errno -2] Name or service not known
+2026-08-15 09:25:29,113 [INFO] LiteLLM: 
+LiteLLM completion() model= claude-haiku-4-5; provider = anthropic
+2026-08-15 09:25:30,606 [INFO] LiteLLM: Wrapper: Completed Call, calling success_handler
+
+StreamPulse domain classifier — 24 labeled examples (6 domains)
+  accuracy : 0.917
+  macro-F1 : 0.915
+
+              precision    recall  f1-score   support
+
+         ESG       1.00      0.75      0.86         4
+     Finance       1.00      1.00      1.00         4
+      Growth       1.00      1.00      1.00         4
+      IT_Ops       1.00      0.75      0.86         4
+  Operations       0.80      1.00      0.89         4
+      People       0.80      1.00      0.89         4
+
+    accuracy                           0.92        24
+   macro avg       0.93      0.92      0.92        24
+weighted avg       0.93      0.92      0.92        24
+

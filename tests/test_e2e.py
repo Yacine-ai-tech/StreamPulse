@@ -5,7 +5,7 @@ from api import app
 import os
 
 client = TestClient(app)
-HEADERS = {"X-OmniIntel-Internal-Token": os.getenv("OMNIINTEL_INTERNAL_TOKEN", "")}
+HEADERS = {"X-Internal-Token": os.getenv("INTERNAL_TOKEN", "")}
 
 import unittest.mock
 
@@ -15,7 +15,7 @@ async def test_e2e_streampulse_webhook_classification():
     payload = {
         "event": "issue_comment",
         "action": "created",
-        "comment": {"body": "This new pricing feature broke my invoice generation."}
+        "comment": {"body": "This new pricing feature broke the invoice generation."}
     }
     
     with unittest.mock.patch("connectors.webhook_receiver.WebhookReceiver.verify_signature", return_value=True):

@@ -110,21 +110,21 @@ export default function UserGuidePage() {
                 </tr>
                 <tr className="border-t border-gray-700">
                   <td className="p-3">Keyword → Embedding → LLM escalation (Tier 3)</td>
-                  <td className="p-3 font-mono text-green-400">100.0%</td>
-                  <td className="p-3 font-mono text-green-400">1.000</td>
+                  <td className="p-3 font-mono text-green-400">91.7%</td>
+                  <td className="p-3 font-mono text-green-400">0.915</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="text-sm text-gray-300 mb-2">
             <span className="font-semibold text-gray-100">Headline:</span> on realistic keyword-poor text, plain
-            keyword matching collapses to 8.3% while the full hybrid pipeline recovers it to 100% — the measured
+            keyword matching collapses to 8.3% while the full hybrid pipeline recovers it to 91.7% — the measured
             justification for paying for the LLM tier at all.
           </p>
           <p className="text-xs text-gray-400 leading-relaxed">
             <span className="font-semibold">Honest caveat (from the benchmark doc itself):</span> real streams are a
             mix of keyword-rich and keyword-poor text, so keyword-only would score well above 8.3% in production,
-            and the LLM tier is opt-in and costs per call. The 24-example set is small and curated — treat 100% as
+            and the LLM tier is opt-in and costs per call. The 24-example set is small and curated — treat 91.7% as
             "clearly separable on a small clean set," not a production guarantee. Reproduce with{' '}
             <code>python eval/run_classifier_benchmark.py</code> and{' '}
             <code>STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py</code>.
