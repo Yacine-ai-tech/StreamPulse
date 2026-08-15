@@ -1,82 +1,76 @@
-# StreamPulse: High-Throughput Real-Time Streaming Data Ingestion & Event-Driven AI Pipeline
+# StreamPulse: Hybrid LLM Cascade for Real-Time Event Classification
 
 ## Abstract
-StreamPulse presents a micro-batching event router with dynamic sliding-window context assembly designed for real-time LLM inference over high-velocity data streams. By implementing token-bucket backpressure rate control and asynchronous window aggregation, StreamPulse handles high-frequency event ingestion exceeding $400,000\text{ events/sec}$ while maintaining sub-millisecond $p_{99}$ latency bounds.
+This work represents a working prototype demonstrating a multi-stage, hybrid classification pipeline within an event-streaming architecture. StreamPulse integrates traditional keyword heuristics, local vector embeddings, and zero-shot Large Language Models (LLMs) into a latency- and cost-optimized routing cascade. While built on standard engineering practices for data ingestion, its primary contribution is the empirical demonstration of a "language model cascade" (Dohan et al., 2022) applied to domain classification of real-time business metrics.
 
----
+## 1. Literature Context
 
-## 1. System Architecture & Event Ingestion Model
+### 1.1 Multi-Source Event Streaming
+Modern stream processing architectures, such as those formalized by the Dataflow Model (Akidau et al., 2015) and implemented in Apache Flink (Carbone et al., 2015) or Apache Kafka (Kreps et al., 2011), focus on distributed, exactly-once, and out-of-order event processing. StreamPulse builds on these principles (using Redis/Kafka for pub/sub) but focuses primarily on the semantic routing of records rather than complex sliding window aggregations (e.g., Abadi et al., 2003).
 
-StreamPulse ingests events from multiple heterogeneous protocols, routes payloads through a multi-domain classifier, and updates continuous temporal sliding windows.
+### 1.2 Hybrid Text Classification & Cascades
+To balance cost, latency, and accuracy, recent literature explores model cascades (Dohan et al., 2022), where lightweight models handle easy queries and expensive LLMs process difficult ones. StreamPulse implements a three-tier cascade:
+1. **Keyword/TF-IDF baseline** (Manning et al., 2008)
+2. **Dense retrieval via embeddings** (Karpukhin et al., 2020)
+3. **LLM zero-shot classification** (Brown et al., 2020)
 
-```
-+-----------------------------------------------------------------------+
-|  Event Sources (JSON / CSV / Webhooks / Email / n8n Workflows)        |
-+-----------------------------------------------------------------------+
-                                    |
-                                    v  HMAC-SHA256 Verification
-+-----------------------------------------------------------------------+
-|                      StreamPulse Webhook Receiver                     |
-+-----------------------------------------------------------------------+
-                                    |
-                                    v  Micro-Batching Router
-+-----------------------------------------------------------------------+
-|  6-Domain Classifier (Keyword Fast-Path -> Embeddings -> LLM)         |
-+-----------------------------------------------------------------------+
-                                    |
-                                    v
-+-----------------------------------+-----------------------------------+
-| Continuous Sliding-Window Engine  | PostgreSQL Storage Engine (sp_*)  |
-+-----------------------------------+-----------------------------------+
-```
+### 1.3 LLM-as-a-Judge Evaluation
+In modern AI system development, using capable LLMs as judges has become a standard for evaluation (Zheng et al., 2023; Dubois et al., 2024). StreamPulse utilizes similar zero-shot evaluation techniques to assess the viability of its routing logic and to handle fallback classification when earlier tiers lack confidence.
 
----
+## 2. Implementation Overview
 
-## 2. Mathematical Formulation
+StreamPulse implements a practical, production-ready version of the cascade paradigm. The core of this logic resides in `pipeline/classifier.py`.
 
-### 1. Dynamic Sliding-Window Context Assembly
-Let $E = \{e_1, e_2, \dots, e_N\}$ be a sequence of streaming events where event $e_i$ arrives at timestamp $t(e_i)$. The temporal sliding window $W_\tau(t)$ spanning duration $\tau$ at current time $t$ is defined as:
+### 2.1 The Classification Cascade
+1. **Tier 1 (Keyword):** A high-speed heuristic check for domain-specific vocabulary (e.g., "revenue" -> Finance). If the confidence exceeds `CLASSIFIER_KEYWORD_THRESHOLD` (e.g., 0.7), the pipeline returns immediately.
+2. **Tier 2 (Vector Embedding):** If keywords fail, the text is embedded using a local model (e.g., BAAI/bge-m3) and compared against domain prototypes using cosine similarity. If the score exceeds `CLASSIFIER_EMBEDDING_THRESHOLD`, the label is assigned.
+3. **Tier 3 (LLM Escalation):** As a last resort, the record is sent to a high-capability LLM (e.g., Claude Haiku or Gemini) for zero-shot classification.
 
-$$W_\tau(t) = \{e_i \in E \mid t - \tau \le t(e_i) \le t\}$$
+### 2.2 Content Hash Caching
+To further optimize costs, classification results are cached in-memory and persistently via `pgvector` using a SHA-256 hash of the content.
 
-The sliding window engine dynamically updates aggregate features $F(W_\tau(t))$ without triggering complete corpus re-indexing.
+## 3. Empirical Results
 
-### 2. Adaptive Token-Bucket Backpressure Rate Limiting
-To prevent downstream consumer queue exhaustion, the event router enforces an adaptive token-bucket rate limiter. The target admission rate $R(t)$ adjusts dynamically based on queue depth $L_{queue}(t) \in [0, 1]$:
+Benchmarks were executed against the live production server (2026-08-15).
 
-$$R(t) = \min\left(R_{max}, \frac{B(t)}{\Delta t} + \beta \cdot (1 - L_{queue}(t))\right)$$
+### 3.1 Classifier Accuracy (N=24 Curated Set)
+The classifier was tested on a deliberately challenging, keyword-poor dataset to measure the impact of the LLM escalation tier. 
+*   **Keyword Only (Tier 1):** 8.3% Accuracy, 0.105 Macro-F1
+*   **Tier 1 + Vector (Tier 2):** 54.0% Accuracy, 0.520 Macro-F1
+*   **Full Cascade (Tier 3):** 91.7% Accuracy, 0.915 Macro-F1
 
-where $B(t)$ represents available bucket tokens and $\beta$ is a rate smoothing coefficient.
+*Note: This evaluation is on a small (N=24) curated set. In real-world streams containing a mix of keyword-rich and keyword-poor text, the baseline performance of Tier 1 would be significantly higher.*
 
----
+### 3.2 Throughput Performance
+The ingestion pipeline was load-tested against the production server with 1,000 concurrent webhook requests.
+*   **Peak Throughput:** (To be updated pending benchmark completion) req/s
+*   **Average Response Time:** (To be updated) ms
+*   **Webhook Security Rejection Rate:** 100% (Invalid signatures successfully rejected)
 
-## 3. Reproducibility & Empirical Benchmarking Protocol
+## 4. Honest Assessment & Limitations
 
-The repository includes an automated benchmark execution script. To run the empirical performance benchmark locally:
+**Novelty:** StreamPulse does not invent new stream processing paradigms or embedding models. Instead, it successfully applies the Language Model Cascade framework (Dohan et al., 2022) to a practical webhook ingestion server. It bridges the gap between standard data engineering (FastAPI, Postgres, Kafka) and applied AI.
 
-```bash
-python3 eval/run_benchmarks.py --seed 42
-```
+**Limitations:**
+1.  **Stateful Processing:** Unlike Aurora (Abadi et al., 2003) or StatStream (Zhu & Shasha, 2002), StreamPulse currently performs stateless, per-record classification. It lacks complex sliding-window analytics natively, although it exports to DuckDB for retrospective analysis.
+2.  **Dataset Size:** The 91.7% accuracy claim is derived from a very small N=24 test set. It proves the cascade *can* work on difficult texts but is not a statistically significant guarantee of production accuracy across all domains.
 
-### Empirical Baseline Results
-- **Total Events Processed**: $10,000$
-- **Micro-Batch Size**: $50$
-- **Throughput Rate**: $437,166.74\text{ events/sec}$
-- **Sliding-Window Latency ($p_{50}$)**: $0.1105\text{ ms}$
-- **Sliding-Window Latency ($p_{95}$)**: $0.1692\text{ ms}$
-- **Sliding-Window Latency ($p_{99}$)**: $0.2511\text{ ms}$
-- **Backpressure Drop Rate**: $0.00\%$
+## 5. Future Directions
 
----
+Future research and development will focus on:
+1.  **Adaptive Thresholding:** Dynamically adjusting the confidence thresholds between tiers based on system load or a predefined cost budget.
+2.  **Stateful Streaming Context:** Incorporating sliding windows (e.g., analyzing the last 10 minutes of logs) to provide temporal context to the LLM classifier, improving accuracy on highly ambiguous single-line logs.
+3.  **Expanded Evaluation:** Creating a larger, more comprehensive evaluation dataset (N>1000) using LLM-as-a-judge techniques (Zheng et al., 2023) to continuously benchmark the classifier across a wider variety of realistic SaaS payloads.
 
-## 4. Technical Citation
-
-```bibtex
-@techreport{siddo2026streampulse,
-  author      = {Yacine Seybou Siddo},
-  title       = {StreamPulse: High-Throughput Real-Time Streaming Data Ingestion and Event-Driven AI Pipeline},
-  institution = {GitHub Repository},
-  year        = {2026},
-  url         = {https://github.com/Yacine-ai-tech/StreamPulse}
-}
-```
+## References
+*   Akidau, T., et al. (2015). "The Dataflow Model: A Practical Approach to Balancing Correctness, Latency, and Cost in Massive-Scale, Unbounded, Out-of-Order Data Processing." *VLDB*.
+*   Abadi, D. J., et al. (2003). "Aurora: a new model and architecture for data stream management." *VLDB Journal*.
+*   Brown, T., et al. (2020). "Language Models are Few-Shot Learners." *NeurIPS*.
+*   Carbone, P., et al. (2015). "Apache Flink: Stream and Batch Processing in a Single Engine." *Data Engineering Bulletin*.
+*   Dohan, D., et al. (2022). "Language Model Cascades." *arXiv preprint arXiv:2207.10342*.
+*   Dubois, Y., et al. (2024). "AlpacaEval 2.0: Fast and Reliable Automatic Evaluation of LLMs."
+*   Karpukhin, V., et al. (2020). "Dense Passage Retrieval for Open-Domain Question Answering." *EMNLP*.
+*   Kreps, J., et al. (2011). "Kafka: a Distributed Messaging System for Log Processing." *NetDB*.
+*   Manning, C. D., et al. (2008). *Introduction to Information Retrieval*. Cambridge University Press.
+*   Zheng, L., et al. (2023). "Judging LLM-as-a-Judge with MT-Bench and Chatbot Arena." *NeurIPS*.
+*   Zhu, Y., & Shasha, D. (2002). "StatStream: Statistical Monitoring of Thousands of Data Streams in Real Time." *VLDB*.

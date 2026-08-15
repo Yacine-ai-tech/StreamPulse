@@ -16,12 +16,12 @@ self-aligned keyword set.
 |------|----------|----------|
 | Keyword only (Tier 1) | **0.083** | 0.105 |
 | Keyword → Vector Embedding (Tier 2) | **0.540** | 0.520 |
-| Keyword → Embedding → **LLM escalation** (Tier 3) | **1.000** | 1.000 |
+| Keyword → Embedding → **LLM escalation** (Tier 3) | **0.917** | 0.915 |
 
 **Headline:** on realistic keyword-poor text, keyword matching collapses (8%) while the hybrid
-classifier's LLM tier recovers it to 100% — the measured justification for the hybrid design.
+classifier's LLM tier recovers it to 91.7% — the measured justification for the hybrid design.
 
 **Honest caveats:** real streams are a *mix* of keyword-rich and keyword-poor text, so keyword
 alone would score far above 8% in production (and the LLM tier is opt-in / costs per call). The
 24-example set is small and curated (no public dataset maps to these 6 custom domains); treat
-the 100% as "clearly separable on a small clean set," not a production guarantee.
+the 91.7% as "clearly separable on a small clean set," not a production guarantee.

@@ -134,11 +134,11 @@ class InternalTokenMiddleware:
         if request.method == "OPTIONS" or path in self.EXEMPT_EXACT or path.startswith(self.EXEMPT_PREFIX):
             return await self.app(scope, receive, send)
 
-        token = request.headers.get("X-OmniIntel-Internal-Token")
-        expected_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+        token = request.headers.get("X-Internal-Token")
+        expected_token = _os.environ.get("INTERNAL_TOKEN", "")
 
         if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
-            response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-OmniIntel-Internal-Token"})
+            response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
             return await response(scope, receive, send)
 
         return await self.app(scope, receive, send)
@@ -327,7 +327,7 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
     import os
     headers = {
         "Content-Type": "application/json",
-        "X-OmniIntel-Internal-Token": os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+        "X-Internal-Token": os.environ.get("INTERNAL_TOKEN", "")
     }
 
     try:
@@ -476,9 +476,9 @@ async def webhook_with_vision(
                         # own internal-token gate exempts /classify-image, but the header costs
                         # nothing when unset and keeps this working if that exemption ever changes.
                         vision_headers = {}
-                        internal_token = _os.environ.get("OMNIINTEL_INTERNAL_TOKEN", "")
+                        internal_token = _os.environ.get("INTERNAL_TOKEN", "")
                         if internal_token:
-                            vision_headers["X-OmniIntel-Internal-Token"] = internal_token
+                            vision_headers["X-Internal-Token"] = internal_token
                         resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data, headers=vision_headers)
                         r["image_category"] = resp.json().get("category")
                         r["image_confidence"] = resp.json().get("confidence")
