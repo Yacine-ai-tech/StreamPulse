@@ -44,8 +44,8 @@ def generate_signature(payload: str, secret: str) -> str:
     ).hexdigest()
 
 class ThroughputBenchmark:
-    def __init__(self, base_url: str = "http://localhost:8000"):
-        self.base_url = base_url
+    def __init__(self, base_url: str = None):
+        self.base_url = base_url or os.environ.get("API_BASE_URL", "http://localhost:8000")
         self.results = {
             "total_requests": 0,
             "successful": 0,
@@ -66,14 +66,14 @@ class ThroughputBenchmark:
             signature = "invalid_signature_test"
         
         headers = {
-            "X-Hub-Signature-256": f"sha256={signature}",
+            "X-Signature-256": f"sha256={signature}",
             "Content-Type": "application/json"
         }
         
         start_time = time.time()
         try:
             response = await client.post(
-                f"{self.base_url}/webhook",
+                f"{self.base_url}/webhook/test_source",
                 json=SAMPLE_PAYLOAD,
                 headers=headers,
                 timeout=10.0
@@ -108,7 +108,8 @@ class ThroughputBenchmark:
         process = psutil.Process(os.getpid())
         initial_memory = process.memory_info().rss / 1024 / 1024  # MB
         
-        async with httpx.AsyncClient(limit=concurrency) as client:
+        limits = httpx.Limits(max_connections=concurrency, max_keepalive_connections=concurrency)
+        async with httpx.AsyncClient(limits=limits) as client:
             self.results["start_time"] = time.time()
             
             # Create batches of concurrent requests
@@ -214,17 +215,18 @@ A stress test of StreamPulse's webhook ingestion pipeline under high load. Repro
 
 async def main():
     # Check if server is running
+    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
     try:
         async with httpx.AsyncClient() as client:
-            response = await client.get("http://localhost:8000/health", timeout=5.0)
+            response = await client.get(f"{base_url}/health", timeout=5.0)
             if response.status_code != 200:
                 print("Warning: Server health check failed, continuing anyway...")
     except Exception as e:
-        print(f"Warning: Could not connect to server at http://localhost:8000: {e}")
+        print(f"Warning: Could not connect to server at {base_url}: {e}")
         print("Make sure StreamPulse is running before benchmarking")
         return
     
-    benchmark = ThroughputBenchmark()
+    benchmark = ThroughputBenchmark(base_url=base_url)
     results = await benchmark.run_concurrent_test(n_requests=1000, concurrency=50)
     update_benchmark_markdown(results)
 
