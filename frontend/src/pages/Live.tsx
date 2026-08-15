@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { PieChart, Pie, Cell, ResponsiveContainer, Tooltip } from "recharts";
 import { ArrowRight, Pause, Play, Radio, Send } from "lucide-react";
@@ -28,6 +28,36 @@ const DOMAIN_COLORS: Record<string, string> = {
 
 type FeedRow = { ev: LiveEvent; rec: ClassifiedRecord; key: string };
 
+const LiveFeedRow = React.memo(({ row, onClick }: { row: FeedRow; onClick: () => void }) => (
+  <motion.button
+    initial={{ opacity: 0, y: -8 }}
+    animate={{ opacity: 1, y: 0 }}
+    className="grid w-full grid-cols-[110px_1fr_auto] items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2"
+    onClick={onClick}
+  >
+    <span className="truncate text-[12px] text-muted">{row.ev.source}</span>
+    <span className="flex min-w-0 items-center gap-2">
+      <span
+        className="inline-block h-2 w-2 shrink-0 rounded-full"
+        style={{ background: DOMAIN_COLORS[String(row.rec.domain)] ?? "var(--text-muted)" }}
+      />
+      <span className="truncate text-[13px] text-body">
+        {String(row.rec.metric ?? row.rec.domain ?? "record")}
+      </span>
+      <Chip title={`classified by ${row.rec.method ?? "keyword"} tier`}>
+        {String(row.rec.domain ?? "—")}{row.rec.method === "llm" ? " · llm" : ""}
+      </Chip>
+      {row.rec.image_category && <Chip tone="accent">vision: {String(row.rec.image_category)}</Chip>}
+    </span>
+    <span className="flex items-center gap-2">
+      <ConfidenceBadge value={typeof row.rec.confidence === "number" ? row.rec.confidence : null} />
+      <span className="num text-[11px] text-muted">
+        {new Date(row.ev.receivedAt).toLocaleTimeString()}
+      </span>
+    </span>
+  </motion.button>
+));
+
 export default function Live() {
   const [state, setState] = useState<"ws" | "sse" | "connecting" | "down">("connecting");
   const [rows, setRows] = useState<FeedRow[]>([]);
@@ -35,7 +65,9 @@ export default function Live() {
   const [clients, setClients] = useState<number | null>(null);
   const [selected, setSelected] = useState<FeedRow | null>(null);
   const pausedRef = useRef(paused);
-  pausedRef.current = paused;
+  useEffect(() => {
+    pausedRef.current = paused;
+  }, [paused]);
   const counter = useRef(0);
 
   useEffect(() => {
@@ -50,9 +82,14 @@ export default function Live() {
   }, []);
 
   useEffect(() => {
-    const t = setInterval(() => api.status().then((s) => setClients(s.connected_clients)).catch(() => {}), 10000);
-    api.status().then((s) => setClients(s.connected_clients)).catch(() => {});
-    return () => clearInterval(t);
+    let mounted = true;
+    const fetchClients = () => api.status().then((s) => mounted && setClients(s.connected_clients)).catch(() => {});
+    const t = setInterval(fetchClients, 10000);
+    fetchClients();
+    return () => {
+      mounted = false;
+      clearInterval(t);
+    };
   }, []);
 
   const perMinute = useMemo(() => {
@@ -106,34 +143,7 @@ export default function Live() {
             <div className="max-h-[520px] divide-y divide-[var(--border)] overflow-y-auto">
               <AnimatePresence initial={false}>
                 {rows.map((row) => (
-                  <motion.button
-                    key={row.key}
-                    initial={{ opacity: 0, y: -8 }}
-                    animate={{ opacity: 1, y: 0 }}
-                    className="grid w-full grid-cols-[110px_1fr_auto] items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2"
-                    onClick={() => setSelected(row)}
-                  >
-                    <span className="truncate text-[12px] text-muted">{row.ev.source}</span>
-                    <span className="flex min-w-0 items-center gap-2">
-                      <span
-                        className="inline-block h-2 w-2 shrink-0 rounded-full"
-                        style={{ background: DOMAIN_COLORS[String(row.rec.domain)] ?? "var(--text-muted)" }}
-                      />
-                      <span className="truncate text-[13px] text-body">
-                        {String(row.rec.metric ?? row.rec.domain ?? "record")}
-                      </span>
-                      <Chip title={`classified by ${row.rec.method ?? "keyword"} tier`}>
-                        {String(row.rec.domain ?? "—")}{row.rec.method === "llm" ? " · llm" : ""}
-                      </Chip>
-                      {row.rec.image_category && <Chip tone="accent">vision: {String(row.rec.image_category)}</Chip>}
-                    </span>
-                    <span className="flex items-center gap-2">
-                      <ConfidenceBadge value={typeof row.rec.confidence === "number" ? row.rec.confidence : null} />
-                      <span className="num text-[11px] text-muted">
-                        {new Date(row.ev.receivedAt).toLocaleTimeString()}
-                      </span>
-                    </span>
-                  </motion.button>
+                  <LiveFeedRow key={row.key} row={row} onClick={() => setSelected(row)} />
                 ))}
               </AnimatePresence>
             </div>

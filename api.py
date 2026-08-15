@@ -3,6 +3,7 @@ StreamPulse API — Real-time multi-source data pipeline.
 """
 from __future__ import annotations
 import base64
+import hmac
 import os as _os
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
@@ -137,8 +138,9 @@ class InternalTokenMiddleware:
         token = request.headers.get("X-Internal-Token")
         expected_token = _os.environ.get("INTERNAL_TOKEN", "")
 
-        if token != expected_token and _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
-            response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
+        if _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
+            if not token or not hmac.compare_digest(token, expected_token):
+                response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
             return await response(scope, receive, send)
 
         return await self.app(scope, receive, send)
@@ -379,16 +381,13 @@ async def ingest_json(
     store_kpi_metrics for the anonymous demo-isolation rationale."""
     # payload stored (truncated in store) so events can be inspected and replayed
     log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id)
-    enriched = []
-    for r in req.records:
+    
+    async def _classify_record(r):
         text_to_classify = r.get("metric", "") + " " + str(r.get("raw", ""))
         c = await asyncio.to_thread(classify, text_to_classify)
-        # Batch-level req.source is the default provenance for every record in it
-        # (an explicit per-record "source" still wins) -- without this, sp_kpi_metrics
-        # rows end up with source=NULL even though sp_ingestion_log correctly recorded
-        # the batch's source, breaking anything that groups KPI data by source
-        # (get_source_performance(), /analytics/domain-summary's source_count).
-        enriched.append({"source": req.source, **r, **c})
+        return {"source": req.source, **r, **c}
+
+    enriched = await asyncio.gather(*[_classify_record(r) for r in req.records])
     inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
     update_ingestion_log(log_id, "completed", records=inserted)
 
