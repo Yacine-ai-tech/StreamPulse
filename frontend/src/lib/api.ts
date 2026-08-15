@@ -132,9 +132,13 @@ export function openLive(
     // (the API's live_sse endpoint accepts either).
     es = new EventSource(`${BASE}/live/sse?session_id=${encodeURIComponent(demoSessionId())}`);
     es.onopen = () => onState("sse");
+    es.onmessage = (m) => {
+      try {
+        const data = JSON.parse(m.data);
+        if (data.event === "ingest") onEvent({ ...data, receivedAt: Date.now() });
+      } catch { }
+    };
     es.onerror = () => { es?.close(); onState("down"); };
-    // SSE payload is recent history, not per-ingest events — used as a fallback signal only.
-  };
 
   const startWS = () => {
     if (closed) return;
