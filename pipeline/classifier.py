@@ -65,8 +65,8 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                 h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
             
             try:
-                # Use a larger timeout for the cold start
-                with httpx.Client(timeout=60.0) as client:
+                # Use a tighter timeout to prevent threadpool exhaustion
+                with httpx.Client(timeout=15.0) as client:
                     if "huggingface.co" in url:
                         resp = client.post(url, json={"inputs": inputs}, headers=h)
                         resp.raise_for_status()
@@ -695,9 +695,10 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
 
         resp = completion(
             model=model,
-            messages=[{"role": "user", "content":
-                       f"Classify this into exactly one label from {labels}. "
-                       f"Reply with ONLY the label.\n\n{content[:1200]}"}],
+            messages=[
+                {"role": "system", "content": f"Classify the following document into exactly one label from {labels}. Reply with ONLY the label."},
+                {"role": "user", "content": f"<document>\n{content[:1200]}\n</document>"}
+            ],
             temperature=0.0,
         )
         label = (resp.choices[0].message.content or "").strip()
@@ -708,8 +709,8 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     except Exception as e:
         log.warning("LLM classify escalation failed: %s", e)
 
-    result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword"}
-    _cache_classification(content, result)
+    result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_fallback"}
+    # Do not cache this result to prevent cache poisoning during LLM outages
     return result
 
 
