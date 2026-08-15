@@ -54,7 +54,7 @@ Every record carries `domain + confidence + method` — the full decision path i
 | Tier | Accuracy | Macro-F1 |
 |------|----------|----------|
 | Keyword only | 8.3% | 0.105 |
-| Hybrid (+ LLM escalation) | 100% | 1.000 |
+| Hybrid (+ LLM escalation) | 91.7% | 0.915 |
 
 Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`
 

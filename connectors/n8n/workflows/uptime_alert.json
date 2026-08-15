@@ -13,7 +13,7 @@
         "sendHeaders": true,
         "headerParameters": {
           "parameters": [
-            { "name": "Authorization", "value": "Bearer {{$env.OMNIINTEL_INTERNAL_TOKEN}}" }
+            { "name": "Authorization", "value": "Bearer {{$env.INTERNAL_TOKEN}}" }
           ]
         },
         "options": {}
