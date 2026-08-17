@@ -23,7 +23,7 @@ class Settings:
     LOGS_DIR = str(LOGS_DIR)
 
     POSTGRES_URL = os.getenv("POSTGRES_URL", "")
-    LLM_DEFAULT = os.getenv("LLM_DEFAULT", "groq/llama-3.3-70b-versatile")
+    LLM_DEFAULT = os.getenv("LLM_DEFAULT", "groq/openai/gpt-oss-120b")
     LLM_JUDGE = os.getenv("LLM_JUDGE", "anthropic/claude-haiku-4-5")
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
