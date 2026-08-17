@@ -64,7 +64,7 @@ Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`
 
 1. **Cost-optimised by default** — LLM escalation is opt-in; ~92% of real streams are handled by Tier 1 at zero cost.
 2. **Transparent method attribution** — every record carries its `method` field, making classification auditable.
-3. **Model-agnostic** — Tiers 2 & 3 use the inference adapter (Orchestrator / Cohere / Jina / local).
+3. **Model-agnostic** — Tiers 2 & 3 use the inference adapter (any remote host you configure / Cohere / Jina / local).
 4. **Graceful degradation** — every tier has try/except fallback; the pipeline never blocks on classifier failure.
 5. **Configurable domains** — extend `DomainClassifier.PATTERNS` without code changes.
 
