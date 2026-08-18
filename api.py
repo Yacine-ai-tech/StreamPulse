@@ -381,14 +381,18 @@ async def ingest_json(
     store_kpi_metrics for the anonymous demo-isolation rationale."""
     # payload stored (truncated in store) so events can be inspected and replayed
     log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id)
-    
+
     async def _classify_record(r):
         text_to_classify = r.get("metric", "") + " " + str(r.get("raw", ""))
         c = await asyncio.to_thread(classify, text_to_classify)
         return {"source": req.source, **r, **c}
 
-    enriched = await asyncio.gather(*[_classify_record(r) for r in req.records])
-    inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
+    try:
+        enriched = await asyncio.gather(*[_classify_record(r) for r in req.records])
+        inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
+    except Exception as e:
+        update_ingestion_log(log_id, "failed", error=str(e)[:2000])
+        raise
     update_ingestion_log(log_id, "completed", records=inserted)
 
     # Broadcast to local WebSockets
