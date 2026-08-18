@@ -4,7 +4,7 @@ import { PageHeader } from "../kit/AppShell";
 import { Button, Card, Chip, EmptyState, Skeleton } from "../kit/primitives";
 import { Segmented, Select } from "../kit/misc";
 import { JSONViewer } from "../kit/JSONViewer";
-import { api, HistoryRow, parsePayload } from "../lib/api";
+import { api, HistoryRow, parsePayload, formatTimestamp } from "../lib/api";
 
 export default function Events() {
   const [rows, setRows] = useState<HistoryRow[] | null>(null);
@@ -95,7 +95,7 @@ function Row({ r }: { r: HistoryRow }) {
         <span className="truncate text-sm text-body">{r.source}</span>
         <span className="num text-[13px] text-dim max-md:hidden">{r.records}</span>
         <span><Chip tone={bad ? "bad" : "ok"}>{r.error ? "error" : r.status}</Chip></span>
-        <span className="num text-[11.5px] text-muted max-md:hidden">{new Date(r.created_at + "Z").toLocaleString()}</span>
+        <span className="num text-[11.5px] text-muted max-md:hidden">{formatTimestamp(r.created_at)}</span>
       </button>
       {open && (
         <div className="space-y-3 px-5 pb-4">

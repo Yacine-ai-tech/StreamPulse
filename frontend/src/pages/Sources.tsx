@@ -3,7 +3,7 @@ import { Cable, Mail, FileSpreadsheet, Webhook, Send, RefreshCw, PlugZap } from 
 import { Link } from "react-router-dom";
 import { PageHeader } from "../kit/AppShell";
 import { Button, Card, Chip, EmptyState, Skeleton } from "../kit/primitives";
-import { api, HistoryRow } from "../lib/api";
+import { api, HistoryRow, formatTimestamp } from "../lib/api";
 
 /* v1 "Sources" — real per-source activity aggregated from the persistent ingestion log.
    Status is derived from actual recent events, never invented. */
@@ -64,7 +64,7 @@ export default function Sources() {
                   <span><strong className="text-body">{events.length}</strong> events</span>
                   <span><strong className="text-body">{recs}</strong> records</span>
                 </div>
-                <div className="num mt-1.5 text-[11.5px] text-muted">last activity {new Date(last.created_at + "Z").toLocaleString()}</div>
+                <div className="num mt-1.5 text-[11.5px] text-muted">last activity {formatTimestamp(last.created_at)}</div>
               </Card>
             );
           })}
