@@ -15,7 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 
@@ -320,11 +320,17 @@ def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
     own breakdown so a caller can tell "the platform" from "what I've actually sent"
     without the platform totals looking like their own activity."""
     init_db()
+    recent_since = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
     with _conn() as c:
         events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}")).fetchone()
         fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL"), ("completed",)).fetchone()
         kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}")).fetchone()
         srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}")).fetchone()
+        # Lifetime counts never recover once a handful of old rows failed (a fixed bug
+        # stays "10/77 failed" forever) — recent_* is what alerting should actually key
+        # off, since it reflects whether ingestion is failing *now*.
+        recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ?"), (recent_since,)).fetchone()
+        recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ? AND (status != ? OR error IS NOT NULL)"), (recent_since, "completed")).fetchone()
         session_stats = None
         if session_id and _demo_session_scoping_enabled():
             s_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?"), (session_id,)).fetchone()
@@ -335,6 +341,9 @@ def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
         "failed_events": g(fails),
         "records_stored": g(kpis),
         "distinct_sources": g(srcs),
+        "recent_ingestion_events": g(recent_events),
+        "recent_failed_events": g(recent_fails),
+        "recent_window_hours": 6,
         "backend": "postgres" if _PG else "sqlite",
     }
     if session_id and _demo_session_scoping_enabled():

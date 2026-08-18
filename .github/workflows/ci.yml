@@ -13,7 +13,6 @@ env:
   PYTHON_VERSION: "3.12"
   NODE_VERSION:   "20"
   STREAMPULSE_URL: ${{ secrets.STREAMPULSE_URL|| '' }}
-  OMNIINTEL_INTERNAL_TOKEN: ${{ secrets.OMNIINTEL_INTERNAL_TOKEN  }}
   TELEMETRY_OPT_OUT: "false"
 
 jobs:
@@ -114,16 +113,14 @@ jobs:
         if: env.STREAMPULSE_URL != ''
         env:
           TEST_BASE_URL: ${{ env.STREAMPULSE_URL }}
-          OMNIINTEL_INTERNAL_TOKEN: ${{ env.OMNIINTEL_INTERNAL_TOKEN }}
         run: |
           pytest tests/test_exhaustive_api.py -v --tb=short
-      
+
       - name: Endpoint availability test
         run: |
           python -c "
           import httpx
-          headers = {'X-OmniIntel-Internal-Token': '${{ env.OMNIINTEL_INTERNAL_TOKEN }}'}
-          
+
           # Test health endpoint
           response = httpx.get('${{ env.STREAMPULSE_URL }}/health', timeout=10)
           print(f'Health: {response.status_code}')
