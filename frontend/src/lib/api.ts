@@ -181,3 +181,12 @@ export function parsePayload(row: HistoryRow): unknown {
     return row.payload;
   }
 }
+
+// Backend timestamps come from Python's datetime.now(timezone.utc).isoformat(), which already
+// ends in an offset like "+00:00" — blindly appending "Z" (as if it were a naive/offset-less
+// string) produces "...+00:00Z", which every JS engine rejects as an invalid ISO string, so
+// every row rendered "Invalid Date". Only append "Z" when there's no offset already present.
+export function formatTimestamp(createdAt: string): string {
+  const hasOffset = /Z$|[+-]\d{2}:\d{2}$/.test(createdAt);
+  return new Date(hasOffset ? createdAt : createdAt + "Z").toLocaleString();
+}
