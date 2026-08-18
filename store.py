@@ -311,19 +311,32 @@ def get_ingestion_row(log_id: int, session_id: Optional[str] = None) -> Optional
     return _clean_row(row) if row else None
 
 
-def store_stats() -> Dict[str, Any]:
-    """Aggregate counters for /pipeline/status (real, from the persistent store)."""
+def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
+    """Aggregate counters for /pipeline/status (real, from the persistent store).
+
+    The top-level counts are deliberately platform-wide (connected_clients always was,
+    and a raw count carries no content — unlike get_kpi_metrics/get_pipeline_history,
+    which return actual records and are scoped). session_id, when given, also gets its
+    own breakdown so a caller can tell "the platform" from "what I've actually sent"
+    without the platform totals looking like their own activity."""
     init_db()
     with _conn() as c:
         events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}")).fetchone()
         fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL"), ("completed",)).fetchone()
         kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}")).fetchone()
         srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}")).fetchone()
+        session_stats = None
+        if session_id and _demo_session_scoping_enabled():
+            s_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?"), (session_id,)).fetchone()
+            s_kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI} WHERE owner_session_id = ?"), (session_id,)).fetchone()
     g = lambda r: (r["n"] if isinstance(r, dict) else r[0]) or 0
-    return {
+    out = {
         "ingestion_events": g(events),
         "failed_events": g(fails),
         "records_stored": g(kpis),
         "distinct_sources": g(srcs),
         "backend": "postgres" if _PG else "sqlite",
     }
+    if session_id and _demo_session_scoping_enabled():
+        out["your_session"] = {"ingestion_events": g(s_events), "records_stored": g(s_kpis)}
+    return out

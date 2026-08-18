@@ -491,10 +491,12 @@ async def webhook_with_vision(
 
 
 @app.get("/pipeline/status")
-async def pipeline_status() -> Dict[str, Any]:
+async def pipeline_status(
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
     out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
     try:
-        out.update(store_stats())
+        out.update(store_stats(session_id=x_demo_session_id))
     except Exception as e:
         log.warning("store_stats failed: %s", e)
     return out
@@ -601,15 +603,19 @@ async def get_storage_stats() -> Dict[str, Any]:
     return stats
 
 @app.get("/analytics/domain-summary")
-async def get_domain_summary(days: int = 7) -> Dict[str, Any]:
-    """Get domain-level summary using DuckDB analytics."""
+async def get_domain_summary(
+    days: int = 7,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    """Get domain-level summary using DuckDB analytics. Scoped the same way
+    /pipeline/history etc. are -- see x_demo_session_id's docstring there."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
-    
+
     try:
         from storage import get_analytics_engine
         analytics = get_analytics_engine()
-        df = analytics.get_domain_summary(days=days)
+        df = analytics.get_domain_summary(days=days, session_id=x_demo_session_id)
         return {
             "data": df.to_dict(orient="records"),
             "count": len(df),
@@ -620,15 +626,18 @@ async def get_domain_summary(days: int = 7) -> Dict[str, Any]:
         return {"error": str(e)}
 
 @app.get("/analytics/classification-trends")
-async def get_classification_trends(days: int = 30) -> Dict[str, Any]:
-    """Get classification method trends over time."""
+async def get_classification_trends(
+    days: int = 30,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    """Get classification method trends over time. See get_domain_summary for scoping."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
-    
+
     try:
         from storage import get_analytics_engine
         analytics = get_analytics_engine()
-        df = analytics.get_classification_trends(days=days)
+        df = analytics.get_classification_trends(days=days, session_id=x_demo_session_id)
         return {
             "data": df.to_dict(orient="records"),
             "count": len(df),
