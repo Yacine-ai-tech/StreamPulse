@@ -3,7 +3,7 @@ import { BellRing, RefreshCw, TriangleAlert } from "lucide-react";
 import { PageHeader } from "../kit/AppShell";
 import { Button, Card, Chip, EmptyState, Skeleton, StatTile } from "../kit/primitives";
 import { JSONViewer } from "../kit/JSONViewer";
-import { api, HistoryRow, parsePayload } from "../lib/api";
+import { api, HistoryRow, parsePayload, formatTimestamp } from "../lib/api";
 
 /* v1 "Alerts" — a real derived view: failures and error events filtered from the
    persistent ingestion log. A query over real data, not a fake alerting engine. */
@@ -50,7 +50,7 @@ export default function Alerts() {
                     <span className="num text-[12px] text-muted">#{r.id}</span>
                     <span className="min-w-0 flex-1 truncate text-sm text-body">{r.source}</span>
                     <Chip tone="bad">{r.error ? "error" : r.status}</Chip>
-                    <span className="num text-[11.5px] text-muted">{new Date(r.created_at + "Z").toLocaleString()}</span>
+                    <span className="num text-[11.5px] text-muted">{formatTimestamp(r.created_at)}</span>
                   </button>
                   {open === i && (
                     <div className="mt-3 space-y-3 border-t border-line pt-3">
