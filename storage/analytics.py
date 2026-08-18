@@ -56,8 +56,14 @@ class AnalyticsEngine:
                     classification_method VARCHAR(50),
                     timestamp TIMESTAMP,
                     ingestion_timestamp TIMESTAMP,
-                    metadata JSON
+                    metadata JSON,
+                    owner_session_id VARCHAR
                 )
+            """)
+            # Idempotent migration for the DB file created before owner_session_id existed
+            # (mirrors store.py's own ALTER TABLE ADD COLUMN IF NOT EXISTS pattern).
+            self._conn.execute("""
+                ALTER TABLE analytics.classified_records ADD COLUMN IF NOT EXISTS owner_session_id VARCHAR
             """)
             
             # Create aggregate fact table for domain summaries
@@ -118,13 +124,18 @@ class AnalyticsEngine:
                     # created_at is stored as TEXT (ISO-8601, see store.py) on the
                     # Postgres side, not a real TIMESTAMP column -- needs an explicit
                     # cast before it can be compared to CURRENT_TIMESTAMP.
+                    # owner_session_id carries straight over from sp_kpi_metrics so this
+                    # DuckDB copy can be scoped the same way the Postgres original is
+                    # (see store.py's owner_session_id docstring) -- it was dropped here
+                    # before, which is why /analytics/* had no visitor scoping at all.
                     query = """
                         SELECT
                             id, source, category AS domain, metric AS metric_name, value AS metric_value,
                             confidence, CAST(created_at AS TIMESTAMP) AS ingestion_timestamp,
                             CURRENT_TIMESTAMP AS timestamp,
                             'imported' AS classification_method,
-                            '{}'::JSON AS metadata
+                            '{}'::JSON AS metadata,
+                            owner_session_id
                         FROM pg_source.sp_kpi_metrics
                         WHERE CAST(created_at AS TIMESTAMP) > CURRENT_TIMESTAMP - INTERVAL '30 days'
                     """
@@ -138,7 +149,8 @@ class AnalyticsEngine:
                 self._conn.execute(f"""
                     INSERT OR REPLACE INTO analytics.classified_records
                         (id, source, domain, metric_name, metric_value, confidence,
-                         ingestion_timestamp, timestamp, classification_method, metadata)
+                         ingestion_timestamp, timestamp, classification_method, metadata,
+                         owner_session_id)
                     {query}
                 """)
 
@@ -152,14 +164,18 @@ class AnalyticsEngine:
             log.error("Failed to import from PostgreSQL: %s", e)
             return 0
 
-    def get_domain_summary(self, days: int = 7) -> pd.DataFrame:
-        """Get domain-level summary for analytics."""
+    def get_domain_summary(self, days: int = 7, session_id: Optional[str] = None) -> pd.DataFrame:
+        """Get domain-level summary for analytics.
+
+        session_id=None (real external callers, e.g. n8n) sees only global/seeded rows
+        (owner_session_id IS NULL) -- same "no scope, no visibility into anyone's demo
+        data" default as store.py's owner_session_id docstring, not "see everything"."""
         if not self._enabled or not self._conn:
             return pd.DataFrame()
-            
+
         try:
             query = f"""
-                SELECT 
+                SELECT
                     domain,
                     COUNT(*) as record_count,
                     AVG(confidence) as avg_confidence,
@@ -167,36 +183,38 @@ class AnalyticsEngine:
                     COUNT(DISTINCT source) as source_count
                 FROM analytics.classified_records
                 WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '{days} days'
+                  AND (owner_session_id IS NULL OR owner_session_id = ?)
                 GROUP BY domain, classification_method
                 ORDER BY domain, record_count DESC
             """
-            
-            return self._conn.execute(query).df()
-            
+
+            return self._conn.execute(query, [session_id]).df()
+
         except Exception as e:
             log.error("Failed to get domain summary: %s", e)
             return pd.DataFrame()
 
-    def get_classification_trends(self, days: int = 30) -> pd.DataFrame:
-        """Get classification trends over time."""
+    def get_classification_trends(self, days: int = 30, session_id: Optional[str] = None) -> pd.DataFrame:
+        """Get classification trends over time. See get_domain_summary for session_id."""
         if not self._enabled or not self._conn:
             return pd.DataFrame()
-            
+
         try:
             query = f"""
-                SELECT 
+                SELECT
                     DATE(timestamp) as classification_date,
                     classification_method,
                     COUNT(*) as total_classifications,
                     AVG(confidence) as avg_confidence
                 FROM analytics.classified_records
                 WHERE timestamp > CURRENT_TIMESTAMP - INTERVAL '{days} days'
+                  AND (owner_session_id IS NULL OR owner_session_id = ?)
                 GROUP BY classification_date, classification_method
                 ORDER BY classification_date DESC, classification_method
             """
-            
-            return self._conn.execute(query).df()
-            
+
+            return self._conn.execute(query, [session_id]).df()
+
         except Exception as e:
             log.error("Failed to get classification trends: %s", e)
             return pd.DataFrame()
