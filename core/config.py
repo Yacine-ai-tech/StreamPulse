@@ -24,7 +24,11 @@ class Settings:
 
     POSTGRES_URL = os.getenv("POSTGRES_URL", "")
     LLM_DEFAULT = os.getenv("LLM_DEFAULT", "groq/openai/gpt-oss-120b")
-    LLM_JUDGE = os.getenv("LLM_JUDGE", "anthropic/claude-haiku-4-5")
+    # Matches LLM_DEFAULT's provider rather than Anthropic -- keeps the classifier's
+    # Tier-3 escalation on the same provider as the rest of the app by default, so a
+    # fresh deploy doesn't depend on a second provider's account/credits being set up
+    # separately. Override via LLM_JUDGE to point Tier 3 at a different model/provider.
+    LLM_JUDGE = os.getenv("LLM_JUDGE", "groq/openai/gpt-oss-120b")
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -50,7 +54,13 @@ class Settings:
 
     # ── Classifier Configuration ───────────────────────────────────────
     CLASSIFIER_KEYWORD_THRESHOLD = float(os.getenv("CLASSIFIER_KEYWORD_THRESHOLD", "0.7"))
-    CLASSIFIER_EMBEDDING_THRESHOLD = float(os.getenv("CLASSIFIER_EMBEDDING_THRESHOLD", "0.5"))
+    # Calibrated against eval/domain_calibration.jsonl (held out from the reported
+    # benchmark set) via eval/calibrate_embedding_threshold.py: true-domain similarity
+    # separated cleanly from competing domains across 0.05-0.50, degrading above 0.55.
+    # Kept conservative (mid-range of the confirmed-safe zone rather than the sweep's
+    # raw best-F1 value) since the shared embedding host's instability capped the
+    # calibration sample size well below what would justify picking the extreme edge.
+    CLASSIFIER_EMBEDDING_THRESHOLD = float(os.getenv("CLASSIFIER_EMBEDDING_THRESHOLD", "0.35"))
     CLASSIFIER_LLM_CONFIDENCE = float(os.getenv("CLASSIFIER_LLM_CONFIDENCE", "0.7"))
     CLASSIFIER_ENABLE_CACHE = os.getenv("CLASSIFIER_ENABLE_CACHE", "true").lower() in ("1", "true", "yes")
     STREAMPULSE_HYBRID_LLM = os.getenv("STREAMPULSE_HYBRID_LLM", "1")

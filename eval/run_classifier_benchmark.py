@@ -1,5 +1,5 @@
 """Domain-classifier benchmark — accuracy + macro-F1 on a curated, balanced labeled set
-(eval/domain_labeled.jsonl, 30 examples across the 6 domains). Reports the fast keyword tier and
+(eval/domain_labeled.jsonl, 48 examples across the 6 domains). Reports the fast keyword tier and
 (with STREAMPULSE_HYBRID_LLM=1 + a key) the LLM-escalation tier.
 
 Usage:  python eval/run_classifier_benchmark.py            # keyword tier
@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 import sys
+import time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -22,7 +23,13 @@ def main():
 
     rows = [json.loads(l) for l in open(ROOT / "eval" / "domain_labeled.jsonl") if l.strip()]
     y_true = [r["domain"] for r in rows]
-    y_pred = [classify(r["text"])["domain"] for r in rows]
+    y_pred = []
+    for r in rows:
+        y_pred.append(classify(r["text"])["domain"])
+        # Small stagger between examples -- the embedding/LLM tiers call a shared
+        # remote host; firing 48 requests back-to-back is itself a source of
+        # contention-driven failures independent of the host's baseline reliability.
+        time.sleep(0.5)
 
     acc = accuracy_score(y_true, y_pred)
     macro_f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
