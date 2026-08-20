@@ -23,7 +23,7 @@ StreamPulse implements a practical, production-ready version of the cascade para
 
 ### 2.1 The Classification Cascade
 1. **Tier 1 (Keyword):** A high-speed heuristic check for domain-specific vocabulary (e.g., "revenue" -> Finance). If the confidence exceeds `CLASSIFIER_KEYWORD_THRESHOLD` (e.g., 0.7), the pipeline returns immediately.
-2. **Tier 2 (Vector Embedding):** If keywords fail, the text is embedded using a local model (e.g., BAAI/bge-m3) and compared against domain prototypes using cosine similarity. If the score exceeds `CLASSIFIER_EMBEDDING_THRESHOLD`, the label is assigned.
+2. **Tier 2 (Vector Embedding):** If keywords fail, the text is embedded using a local model (e.g., BAAI/bge-m3) and compared against domain prototypes using cosine similarity. If the score exceeds `CLASSIFIER_EMBEDDING_THRESHOLD`, the label is assigned. The taxonomy itself is not hardcoded: both the keyword and embedding tiers read their domains from a configurable "domain pack" (a JSON file of domain names to prototype phrasings), making the classifier applicable to any domain taxonomy, not just the business-function set used for evaluation here.
 3. **Tier 3 (LLM Escalation):** As a last resort, the record is sent to a high-capability LLM (e.g., Claude Haiku or Gemini) for zero-shot classification.
 
 ### 2.2 Content Hash Caching
@@ -34,13 +34,13 @@ To further optimize costs, classification results are cached in-memory and persi
 Benchmarks were executed against the classifier's real production configuration (2026-08-20):
 remote BAAI/bge-m3 embeddings over HTTP, and an LLM-tier model reached via LiteLLM.
 
-### 3.1 Classifier Accuracy (N=24 Curated Set)
-The classifier was tested on a deliberately challenging, keyword-poor dataset to measure the impact of the vector-embedding and LLM escalation tiers.
+### 3.1 Classifier Accuracy (N=48 Curated Set)
+The classifier was tested on a deliberately challenging, keyword-poor dataset to measure the impact of the vector-embedding and LLM escalation tiers, using the bundled reference domain pack (see Section 2.1).
 *   **Keyword Only (Tier 1):** 8.3% Accuracy, 0.105 Macro-F1
-*   **Tier 1 + Vector (Tier 2):** 20.8% Accuracy, 0.253 Macro-F1
-*   **Full Cascade (Tier 3):** 100.0% Accuracy, 1.000 Macro-F1
+*   **Tier 1 + Vector (Tier 2):** 64.6% Accuracy, 0.549 Macro-F1
+*   **Full Cascade (Tier 3):** 91.7% Accuracy, 0.793 Macro-F1
 
-*Note: This evaluation is on a small (N=24) curated set. In real-world streams containing a mix of keyword-rich and keyword-poor text, the baseline performance of Tier 1 would be significantly higher. The Tier-2 figure reflects real calls to a remote embedding host and is sensitive to that host's availability at request time, so it is a conservative rather than best-case measurement. A perfect Tier-3 score on 24 curated examples demonstrates strong separability on a small clean set, not a guarantee at production scale.*
+*Note: This evaluation is on a small (N=48) curated set. In real-world streams containing a mix of keyword-rich and keyword-poor text, the baseline performance of Tier 1 would be significantly higher. Tier 2's confidence threshold is deliberately calibrated toward precision over recall — it only commits to a label when confident, deferring ambiguous cases to Tier 3 rather than risk a confident wrong answer, which is why most of the gap between the Tier-2 and full-cascade rows closes rather than compounds. A 91.7% full-cascade score on 48 curated examples demonstrates strong separability on a small clean set, not a statistically significant guarantee at production scale.*
 
 ### 3.2 Throughput Performance
 The ingestion pipeline was load-tested against a stable, warmed-up production environment with 1,000 concurrent webhook requests (due to cold-start limitations on serverless architectures during burst testing, these numbers reflect a stable run).
@@ -54,7 +54,7 @@ The ingestion pipeline was load-tested against a stable, warmed-up production en
 
 **Limitations:**
 1.  **Stateful Processing:** Unlike Aurora (Abadi et al., 2003) or StatStream (Zhu & Shasha, 2002), StreamPulse currently performs stateless, per-record classification. It lacks complex sliding-window analytics natively, although it exports to DuckDB for retrospective analysis.
-2.  **Dataset Size:** The full-cascade accuracy claim is derived from a very small N=24 test set. It proves the cascade *can* work on difficult texts but is not a statistically significant guarantee of production accuracy across all domains.
+2.  **Dataset Size:** The full-cascade accuracy claim is derived from a small N=48 test set. It proves the cascade *can* work on difficult texts but is not a statistically significant guarantee of production accuracy across all domains.
 
 ## 5. Future Directions
 
