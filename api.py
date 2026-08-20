@@ -47,6 +47,11 @@ log = get_logger(__name__)
 app = FastAPI(title="StreamPulse", version="0.1.0",
               description="Real-time business data pipeline.")
 
+# Where the anonymous startup ping goes when the deployer hasn't set TELEMETRY_URL.
+# Telemetry is ON BY DEFAULT and documented in TELEMETRY.md; TELEMETRY_OPT_OUT=true
+# disables it completely, and setting TELEMETRY_URL="" also disables it.
+DEFAULT_TELEMETRY_URL = "https://gateway.ysiddo-ai-projects.app/telemetry"
+
 
 
 
@@ -77,9 +82,19 @@ def _telemetry_instance_id() -> str:
 def _send_telemetry():
     """
     One anonymous startup ping per ~6h to TELEMETRY_URL, so the project can count distinct
-    installs. Sends only {service, event, instance_id} — no ingested records, filenames,
-    IPs, or other request data. Disable entirely with TELEMETRY_OPT_OUT=true.
+    installs. Sends only {service, event, version, instance_id} — no ingested records,
+    filenames, IPs, or other request data. See TELEMETRY.md.
+
+    On by default: TELEMETRY_URL defaults to the project's own collector. Disable entirely
+    with TELEMETRY_OPT_OUT=true, which returns before any file access or network call is
+    made (no DNS lookup, no request), or repoint TELEMETRY_URL at your own collector.
     """
+    if os.environ.get("TELEMETRY_OPT_OUT", "").strip().lower() in ("1", "true", "yes"):
+        return
+
+    telemetry_url = os.environ.get("TELEMETRY_URL", DEFAULT_TELEMETRY_URL).strip()
+    if not telemetry_url:
+        return
 
     lock_file = os.path.join(settings.LOGS_DIR, ".telemetry_last_ping")
     try:
@@ -91,13 +106,15 @@ def _send_telemetry():
         pass
 
     try:
-        telemetry_url = os.environ.get(
-            "TELEMETRY_URL", os.environ.get("TELEMETRY_URL", "https://gateway.ysiddo-ai-projects.app/telemetry")
-        )
         log.info("Anonymous telemetry ping to %s (set TELEMETRY_OPT_OUT=true to disable).", telemetry_url)
         httpx.post(
             telemetry_url,
-            json={"service": "StreamPulse", "event": "startup", "instance_id": _telemetry_instance_id()},
+            json={
+                "service": "StreamPulse",
+                "event": "startup",
+                "version": app.version,
+                "instance_id": _telemetry_instance_id(),
+            },
             timeout=2,
         )
     except Exception:
