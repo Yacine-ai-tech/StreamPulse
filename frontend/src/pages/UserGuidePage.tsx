@@ -164,11 +164,13 @@ export default function UserGuidePage() {
           <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 flex items-start gap-3">
             <Activity className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <p className="text-xs text-gray-300 leading-relaxed">
-              <span className="font-semibold text-gray-100">Measured under load</span> (<code>eval/WEBHOOK_BENCHMARK.md</code>,{' '}
-              <code>eval/THROUGHPUT_BENCHMARK.md</code>): 100/100 correctly-signed requests accepted and 10/10
-              invalid signatures rejected across 100 concurrent requests; a separate 1,000-request stress test
-              (2026-07-28, Postgres with connection pooling) measured 847 req/s peak throughput, 23ms average / 89ms
-              P95 response time, 0.12% error rate, and 100% rejection of invalid signatures under load.
+              <span className="font-semibold text-gray-100">Measured under load</span> (<code>eval/THROUGHPUT_BENCHMARK.md</code>):
+              a 1,000-request instantaneous burst (no ramp-up) against a single free-tier instance measured 22 req/s
+              peak throughput, 1,912ms average / 10,358ms P95 response time, and a 100% error rate under that
+              overload -- evidence the endpoint needs request queuing/backpressure or horizontal scaling before this
+              load shape is production-safe, not a number to read as sustained capacity. That same overload meant
+              signature verification wasn't meaningfully exercised in this particular run (nearly every request
+              failed the same way regardless of signature validity); see the source file for the full honest read.
             </p>
           </div>
         </section>
