@@ -1,0 +1,61 @@
+{
+  "Finance": [
+    "finance revenue profit margin cash flow ebitda",
+    "quarterly earnings, expenses, and profitability",
+    "we brought in more money and kept more of it after costs",
+    "balance sheet, income statement, and financial reporting",
+    "budget planning and cost control",
+    "money coming in and going out of the business"
+  ],
+  "Operations": [
+    "operations supply chain inventory logistics throughput",
+    "manufacturing efficiency and production capacity",
+    "goods moving through the warehouse and delivery network",
+    "process quality, defects, and cycle time",
+    "procurement and vendor management",
+    "how smoothly the day to day work gets done"
+  ],
+  "Growth": [
+    "growth marketing customer acquisition retention churn",
+    "new customer signups and expanding into new markets",
+    "how many people are trying the product and sticking with it",
+    "marketing campaigns, conversion rates, and word of mouth",
+    "recurring revenue and account expansion",
+    "winning new business and keeping existing customers longer"
+  ],
+  "People": [
+    "hr people employee turnover hiring retention",
+    "staff engagement, training, and workforce planning",
+    "hiring new team members and people leaving the company",
+    "compensation, benefits, and employee satisfaction",
+    "how happy and how long people stay working here",
+    "recruiting talent and building the team"
+  ],
+  "ESG": [
+    "esg sustainability carbon diversity governance",
+    "environmental impact and emissions reduction",
+    "corporate responsibility and board oversight",
+    "workplace safety and community impact",
+    "how the company treats the planet and its people fairly",
+    "diversity, ethics, and long-term stewardship"
+  ],
+  "IT_Ops": [
+    "it uptime latency incident deployment devops",
+    "system reliability and infrastructure performance",
+    "software releases, outages, and technical incidents",
+    "cybersecurity and data protection",
+    "keeping the servers and systems running smoothly",
+    "engineering velocity and platform stability"
+  ],
+  "General": [
+    "general company update news announcement",
+    "corporate communications and press releases",
+    "leadership changes and strategic announcements",
+    "company culture and internal news",
+    "miscellaneous business update not tied to one department",
+    "broad organizational news",
+    "the weather, sports, or something unrelated to work",
+    "a personal message with nothing to do with the business",
+    "small talk or a topic that has nothing to do with any department"
+  ]
+}
