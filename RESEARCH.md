@@ -43,10 +43,12 @@ The classifier was tested on a deliberately challenging, keyword-poor dataset to
 *Note: This evaluation is on a small (N=48) curated set. In real-world streams containing a mix of keyword-rich and keyword-poor text, the baseline performance of Tier 1 would be significantly higher. Tier 2's confidence threshold is deliberately calibrated toward precision over recall — it only commits to a label when confident, deferring ambiguous cases to Tier 3 rather than risk a confident wrong answer, which is why most of the gap between the Tier-2 and full-cascade rows closes rather than compounds. A 91.7% full-cascade score on 48 curated examples demonstrates strong separability on a small clean set, not a statistically significant guarantee at production scale.*
 
 ### 3.2 Throughput Performance
-The ingestion pipeline was load-tested against a stable, warmed-up production environment with 1,000 concurrent webhook requests (due to cold-start limitations on serverless architectures during burst testing, these numbers reflect a stable run).
-*   **Peak Throughput:** 847 req/s
-*   **Average Response Time:** 23 ms
-*   **Webhook Security Rejection Rate:** 100% (Invalid signatures successfully rejected)
+The ingestion pipeline was load-tested with 1,000 concurrent webhook requests fired at once (no ramp-up) against a single-instance, free-tier deployment.
+*   **Peak Throughput:** 22 req/s
+*   **Average Response Time:** 1,912 ms (P95: 10,358 ms)
+*   **Error Rate:** 100% under this specific load shape
+
+*This instantaneous burst overwhelmed a single free-tier instance -- every request errored and response times ran into the seconds. Near-zero memory usage and moderate database-pool usage during the test indicate the bottleneck was request-handling capacity (a single process, single instance), not memory or the database. This is not a number to read as production throughput; it demonstrates that unthrottled bursts at this scale need either request queuing/backpressure or horizontal scaling before this load shape is production-safe. Full setup and a dedicated, unsaturated measurement of signature-verification correctness (not exercised meaningfully by this overloaded run) are in the benchmark suite (`eval/THROUGHPUT_BENCHMARK.md`).*
 
 ## 4. Honest Assessment & Limitations
 
