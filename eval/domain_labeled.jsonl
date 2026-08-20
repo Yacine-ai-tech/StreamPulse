@@ -22,3 +22,27 @@
 {"text": "Help-desk cases were resolved faster and there were fewer outages", "domain": "IT_Ops"}
 {"text": "We closed a security hole across our hosted environment", "domain": "IT_Ops"}
 {"text": "Releases shipped more often while breakages went down", "domain": "IT_Ops"}
+{"text": "The auditors want more detail on how the year-end figures were reached", "domain": "Finance"}
+{"text": "Collections came in slower than usual, so we had to delay a few payments", "domain": "Finance"}
+{"text": "We trimmed discretionary spending to protect our runway", "domain": "Finance"}
+{"text": "After the write-down, the numbers on paper look worse than they feel", "domain": "Finance"}
+{"text": "Cross-training staff let us cover absences without slowing the line", "domain": "Operations"}
+{"text": "We're still waiting on a part that's holding up final assembly", "domain": "Operations"}
+{"text": "Switching machines between product runs now takes half the time", "domain": "Operations"}
+{"text": "A forklift breakdown backed up the loading dock for hours", "domain": "Operations"}
+{"text": "A pricing test led more visitors to complete a purchase", "domain": "Growth"}
+{"text": "Word of mouth is now our biggest source of new customers", "domain": "Growth"}
+{"text": "We paused a campaign that wasn't bringing in enough new accounts", "domain": "Growth"}
+{"text": "We reviewed which growth channels actually brought in paying customers", "domain": "Growth"}
+{"text": "Morale dipped after the reorg but seems to be recovering", "domain": "People"}
+{"text": "We adjusted the bonus structure to better reward long-tenured staff", "domain": "People"}
+{"text": "Manager training sessions filled up faster than we expected", "domain": "People"}
+{"text": "A wave of retirements is going to leave a gap in institutional knowledge", "domain": "People"}
+{"text": "The plant passed its environmental inspection with no violations twice in a row", "domain": "ESG"}
+{"text": "We set a target to cut waste sent to landfill by next year", "domain": "ESG"}
+{"text": "Community feedback shaped how we planned the new facility", "domain": "ESG"}
+{"text": "We added an anonymous channel for reporting safety concerns", "domain": "ESG"}
+{"text": "A phishing attempt was caught before anyone clicked through", "domain": "IT_Ops"}
+{"text": "We're consolidating three monitoring tools into one dashboard", "domain": "IT_Ops"}
+{"text": "The backup job silently failed for two nights before anyone noticed", "domain": "IT_Ops"}
+{"text": "On-call load dropped after we fixed the noisiest alert rules", "domain": "IT_Ops"}
