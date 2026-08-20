@@ -1,12 +1,15 @@
 """
 Real-Time Data Pipeline — Live ingestion from email, sheets, webhooks, APIs.
 
-Integrates with all domain services (Finance, HR, Operations, Logistics, IT, ESG)
-to provide streaming data updates with automatic routing, transformation, and storage.
+Domain- and data-agnostic: the pipeline has no built-in notion of "Finance" or
+"HR". Records are routed against whichever domain taxonomy is configured via a
+domain pack (see domain_packs/, STREAMPULSE_DOMAIN_PACK). The bundled demo pack
+(Finance, Operations, Growth, People, ESG, IT_Ops) is one example configuration,
+not a fixed schema -- swap in a pack for any other set of domains.
 
 FEATURES:
 - Multi-source data ingestion (Gmail, Sheets, N8N, Webhooks, APIs)
-- Auto-classification to domains (Finance, HR, Operations, etc.)
+- Auto-classification to a configurable domain taxonomy
 - Real-time validation & transformation
 - Duplicate detection & merging
 - Anomaly detection & alerts
@@ -17,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,12 +53,151 @@ log = get_logger(__name__)
 
 _embedder_cache: Dict[str, Any] = {}
 
+# Multiple, diversely-phrased prototypes per domain instead of one -- a single short
+# prototype sentence is a noisy target for cosine similarity against real (often
+# keyword-poor, paraphrased) input text. Matching against several phrasings per domain
+# and taking the best (max-pooled) similarity is the standard fix for prototype-based
+# zero-shot classification. Shared by classify() and eval/calibrate_embedding_threshold.py
+# so the benchmark measures the exact same matching logic production uses.
+#
+# The actual domain taxonomy is NOT hardcoded here -- it's loaded from a domain pack
+# (see domain_packs/README.md, STREAMPULSE_DOMAIN_PACK), so a deployment can classify
+# against any set of domains, not just the bundled business-function demo pack. The
+# demo pack's own "General" catch-all has two jobs worth keeping in mind when writing
+# a custom pack: catch genuine content that doesn't fit any other domain, AND catch
+# content that isn't relevant to the taxonomy at all. A catch-all scoped only to
+# on-topic-but-uncategorized phrasing loses that second job -- cosine similarity
+# between short embeddings and unrelated text sits in a nontrivial baseline band
+# regardless of true relevance, so a narrowly-scoped catch-all can be out-competed by
+# another domain's vaguest prototype on totally off-topic input. Mixing in genuinely
+# unrelated, everyday phrasing gives the catch-all a fighting chance at winning that
+# contest too.
+_DOMAIN_PACKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "domain_packs")
+_DEFAULT_DOMAIN_PACK_PATH = os.path.join(_DOMAIN_PACKS_DIR, "demo_business.json")
+
+
+def _load_domain_prototypes() -> Dict[str, List[str]]:
+    pack_path = os.getenv("STREAMPULSE_DOMAIN_PACK", "") or _DEFAULT_DOMAIN_PACK_PATH
+    try:
+        import json
+        with open(pack_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        valid = (
+            isinstance(data, dict) and data and all(
+                isinstance(domain, str) and isinstance(prototypes, list) and prototypes
+                and all(isinstance(p, str) for p in prototypes)
+                for domain, prototypes in data.items()
+            )
+        )
+        if valid:
+            return data
+        log.warning("Domain pack at %s is malformed (expected {domain: [phrases]}), "
+                    "falling back to bundled demo pack", pack_path)
+    except Exception as e:
+        log.warning("Failed to load domain pack from %s (%s), falling back to bundled demo pack",
+                    pack_path, e)
+
+    if pack_path != _DEFAULT_DOMAIN_PACK_PATH:
+        with open(_DEFAULT_DOMAIN_PACK_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    raise RuntimeError(f"Bundled default domain pack is missing or unreadable: {_DEFAULT_DOMAIN_PACK_PATH}")
+
+
+DOMAIN_PROTOTYPES: Dict[str, List[str]] = _load_domain_prototypes()
+
+_PROTO_DOMAINS = list(DOMAIN_PROTOTYPES.keys())
+_FLAT_PROTOTYPES: List[str] = []
+_PROTO_DOMAIN_IDX: List[int] = []
+for _d_idx, _d in enumerate(_PROTO_DOMAINS):
+    for _p in DOMAIN_PROTOTYPES[_d]:
+        _FLAT_PROTOTYPES.append(_p)
+        _PROTO_DOMAIN_IDX.append(_d_idx)
+
+
+def _dot_product(v1, v2):
+    return sum(x * y for x, y in zip(v1, v2))
+
+
+def _magnitude(v):
+    return sum(x * x for x in v) ** 0.5
+
+
+def embedding_domain_match(content: str) -> Optional[Tuple[str, float, List[float]]]:
+    """Embed `content` and score it against every domain's prototypes, returning
+    (best_domain, best_similarity, content_embedding) -- max-pooled per domain across
+    that domain's prototype phrasings. The raw content embedding is returned too so
+    callers can persist it (e.g. the pgvector cache) without a second embed call.
+    Returns None if the remote embedding call didn't succeed. Does NOT apply
+    CLASSIFIER_EMBEDDING_THRESHOLD -- callers decide what to do with the raw score
+    (classify() thresholds it; the calibration script sweeps it)."""
+    inputs = [content[:500]] + _FLAT_PROTOTYPES
+    embeddings = _embed(inputs, model=settings.STREAMPULSE_EMBED_MODEL)
+    if not embeddings or len(embeddings) != len(inputs):
+        return None
+
+    content_emb = embeddings[0]
+    proto_embs = embeddings[1:]
+    c_mag = _magnitude(content_emb)
+
+    best_per_domain = [-1.0] * len(_PROTO_DOMAINS)
+    for p_emb, d_idx in zip(proto_embs, _PROTO_DOMAIN_IDX):
+        p_mag = _magnitude(p_emb)
+        if c_mag > 0 and p_mag > 0:
+            score = _dot_product(content_emb, p_emb) / (c_mag * p_mag)
+            if score > best_per_domain[d_idx]:
+                best_per_domain[d_idx] = score
+
+    best_score = -1.0
+    best_domain = "General"
+    for d_idx, score in enumerate(best_per_domain):
+        if score > best_score:
+            best_score = score
+            best_domain = _PROTO_DOMAINS[d_idx]
+    return best_domain, best_score, content_emb
+
+# Remote embedding host is a shared, on-demand GPU box (see sibling projects'
+# clients -- IntelAI's hybrid_retrieval.py, DocIntel's services/route_b.py -- which
+# already solved this exact problem the same way): it does NOT hold a request open
+# while it boots. A stopped host answers an early request quickly with an error body
+# signalling a wake was triggered (a `_woke` flag, or -- since this endpoint's HTTP
+# wrapper collapses the structured error to a plain string -- the substring "_woke",
+# "530", "waking", or "cold" inside it) rather than blocking for the ~2-5 minutes a
+# real cold boot takes. So a short per-attempt timeout is the wrong axis to tune --
+# what matters is a long TOTAL budget, polled periodically, that distinguishes "still
+# waking, keep waiting" from "genuinely broken, stop and report it".
+_EMBED_WAKE_BUDGET_SECONDS = float(os.getenv("INFERENCE_WAKE_TIMEOUT", "420"))
+_EMBED_POLL_DELAY_SECONDS = float(os.getenv("INFERENCE_RETRY_DELAY", "15"))
+_EMBED_PER_ATTEMPT_TIMEOUT = 30.0
+_WAKING_HINTS = ("_woke", "530", "waking", "cold")
+
+
+def _looks_like_still_waking(text: str) -> bool:
+    t = (text or "").lower()
+    return any(hint in t for hint in _WAKING_HINTS)
+
+
+def _is_valid_embedding(vec: Any) -> bool:
+    """Reject degenerate responses (wrong dimensionality, all-zero/near-constant
+    vectors) that would otherwise look like a successful call but aren't a genuine
+    BGE-M3 encoding — e.g. a misconfigured host silently returning a placeholder."""
+    if not isinstance(vec, (list, tuple)) or len(vec) != 1024:
+        return False
+    try:
+        floats = [float(x) for x in vec]
+    except (TypeError, ValueError):
+        return False
+    mean = sum(floats) / len(floats)
+    variance = sum((x - mean) ** 2 for x in floats) / len(floats)
+    return variance > 1e-8
+
 
 def _embed(inputs: List[str], model: str) -> List[List[float]]:
     """Encode `inputs` with a local sentence-transformers model (BGE by default).
     The model is loaded once per name and reused across calls.
-    If INFERENCE_MODE is remote, calls the HF Inference API to avoid OOM."""
-    
+    If INFERENCE_MODE is remote, calls the configured remote embedding host instead,
+    polling through a cold start (see _EMBED_WAKE_BUDGET_SECONDS above) rather than
+    giving up on the first one or two quick attempts."""
+
     if settings.INFERENCE_MODE == "remote":
         url = settings.EMBEDDING_ENDPOINT
         if url:
@@ -63,30 +206,72 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
             h = {"Content-Type": "application/json", "User-Agent": "StreamPulse/1.0"}
             if settings.INFERENCE_TOKEN:
                 h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
-            
-            try:
-                # Use a tighter timeout to prevent threadpool exhaustion
-                with httpx.Client(timeout=15.0) as client:
-                    if "huggingface.co" in url:
-                        resp = client.post(url, json={"inputs": inputs}, headers=h)
-                        resp.raise_for_status()
-                        
-                        data = resp.json()
-                        # Simple feature extraction might return 3D arrays
-                        arr = np.asarray(data, dtype=float)
-                        if arr.ndim == 3:
-                            arr = arr.mean(axis=1)
-                        return arr.tolist()
-                    else:
-                        payload = {"texts": inputs, "model": model}
-                        resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
-                        resp.raise_for_status()
-                        return resp.json()["embeddings"]
-            except Exception as e:
-                log.warning("Remote embedding failed: %s", e)
-                # Do not fall back to local if it fails, to prevent OOM in memory-constrained environments.
-                # Just return an empty list or let it fail over.
-                return []
+
+            deadline = time.monotonic() + _EMBED_WAKE_BUDGET_SECONDS
+            attempt = 0
+            last_desc = "unknown"
+            while True:
+                attempt += 1
+                resp = None
+                try:
+                    with httpx.Client(timeout=_EMBED_PER_ATTEMPT_TIMEOUT) as client:
+                        if "huggingface.co" in url:
+                            resp = client.post(url, json={"inputs": inputs}, headers=h)
+                            body_text = resp.text
+                            resp.raise_for_status()
+
+                            data = resp.json()
+                            # Simple feature extraction might return 3D arrays
+                            arr = np.asarray(data, dtype=float)
+                            if arr.ndim == 3:
+                                arr = arr.mean(axis=1)
+                            result = arr.tolist()
+                        else:
+                            payload = {"texts": inputs, "model": model}
+                            resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
+                            body_text = resp.text
+                            resp.raise_for_status()
+                            result = resp.json()["embeddings"]
+
+                    if result and all(_is_valid_embedding(v) for v in result):
+                        if attempt > 1:
+                            log.info("Remote embedding ready after %d attempt(s)", attempt)
+                        return result
+                    last_desc = "response had wrong shape or near-zero variance"
+                except Exception as e:
+                    status_code = getattr(resp, "status_code", None) if resp is not None else None
+                    body_text = (getattr(resp, "text", "") or "") if resp is not None else ""
+                    last_desc = f"{type(e).__name__}: {e}"
+                    # This endpoint's HTTP wrapper (app.py's /embed route) always answers
+                    # 503 for every internal failure mode of the wake protocol -- a
+                    # genuinely-still-waking studio, "no_studio_available", an origin
+                    # error from a studio mid-boot -- not just the ones whose error text
+                    # happens to contain a recognizable substring. So a 503 from THIS
+                    # host is always worth continuing to poll for; only a different
+                    # status code (auth, bad request, etc.) or a body that doesn't even
+                    # look wake-shaped on a non-503 response should fail fast.
+                    is_503 = status_code == 503
+                    if not is_503 and body_text and not _looks_like_still_waking(body_text) and not _looks_like_still_waking(last_desc):
+                        # A real, specific error (bad request, auth failure, etc.) --
+                        # not the shared host waking up. No point burning the wake
+                        # budget retrying something a retry can't fix.
+                        log.warning("Remote embedding failed with a non-wake error, not retrying further: %s", last_desc)
+                        return []
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
+                    log.warning(
+                        "Remote embedding: host still not ready after %.0fs (%d attempts). Last: %s",
+                        _EMBED_WAKE_BUDGET_SECONDS, attempt, last_desc,
+                    )
+                    # Do not fall back to local if remote never came up, to prevent OOM
+                    # in memory-constrained environments. Let the caller degrade instead.
+                    return []
+                log.info(
+                    "Remote embedding: host still waking (attempt %d, %s) -- retrying in %.0fs "
+                    "(%.0fs of budget left)", attempt, last_desc, min(_EMBED_POLL_DELAY_SECONDS, remaining), remaining,
+                )
+                time.sleep(min(_EMBED_POLL_DELAY_SECONDS, max(remaining, 0)))
 
     from sentence_transformers import SentenceTransformer
 
@@ -636,37 +821,9 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 pg_cache = None
 
         try:
-            domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
-            prototypes = [
-                "finance revenue profit margin cash flow ebitda",
-                "operations supply chain inventory logistics throughput",
-                "hr people employee turnover hiring retention",
-                "esg sustainability carbon diversity governance",
-                "it uptime latency incident deployment devops",
-                "general company update news announcement",
-            ]
-            inputs = [content[:500]] + prototypes
-            embeddings = _embed(inputs, model=settings.STREAMPULSE_EMBED_MODEL)
-            if embeddings and len(embeddings) == len(inputs):
-                content_emb = embeddings[0]
-                proto_embs = embeddings[1:]
-                best_score = -1.0
-                best_domain = "General"
-
-                def dot_product(v1, v2):
-                    return sum(x * y for x, y in zip(v1, v2))
-
-                def magnitude(v):
-                    return sum(x * x for x in v) ** 0.5
-
-                c_mag = magnitude(content_emb)
-                for idx, p_emb in enumerate(proto_embs):
-                    p_mag = magnitude(p_emb)
-                    if c_mag > 0 and p_mag > 0:
-                        score = dot_product(content_emb, p_emb) / (c_mag * p_mag)
-                        if score > best_score:
-                            best_score = score
-                            best_domain = domains[idx]
+            match = embedding_domain_match(content or "")
+            if match is not None:
+                best_domain, best_score, content_emb = match
                 if best_score >= settings.CLASSIFIER_EMBEDDING_THRESHOLD:
                     result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
                     _cache_classification(content, result)
@@ -725,4 +882,6 @@ __all__ = [
     "_content_hash",
     "_get_cached_classification",
     "_cache_classification",
+    "embedding_domain_match",
+    "DOMAIN_PROTOTYPES",
 ]
