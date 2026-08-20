@@ -54,9 +54,11 @@ Every record carries `domain + confidence + method` — the full decision path i
 | Tier | Accuracy | Macro-F1 |
 |------|----------|----------|
 | Keyword only | 8.3% | 0.105 |
-| Hybrid (+ LLM escalation) | 91.7% | 0.915 |
+| Keyword + Vector embedding | 20.8% | 0.253 |
+| Hybrid (+ LLM escalation) | 100.0% | 1.000 |
 
-Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`
+Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`. Full methodology
+and caveats: [eval/CLASSIFIER_BENCHMARK.md](../eval/CLASSIFIER_BENCHMARK.md).
 
 ---
 
@@ -74,6 +76,6 @@ Reproduce: `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py`
 
 | Env var | Default | Effect |
 |---------|---------|--------|
-| `STREAMPULSE_HYBRID_LLM` | `0` | Set to `1` to enable Tiers 2 & 3 |
+| `STREAMPULSE_HYBRID_LLM` | `1` | Set to `0` to disable Tiers 2 & 3 (keyword-only) |
 | `STREAMPULSE_EMBED_MODEL` | `BAAI/bge-m3` | Embedding model for Tier 2 |
 | `LLM_JUDGE` | settings.LLM_JUDGE | LLM for Tier 3 |
