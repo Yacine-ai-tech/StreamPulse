@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import time
 from dataclasses import dataclass
 from datetime import datetime
 from typing import Any, Callable, Dict, List, Optional, Tuple
@@ -49,12 +50,167 @@ log = get_logger(__name__)
 
 _embedder_cache: Dict[str, Any] = {}
 
+# Multiple, diversely-phrased prototypes per domain instead of one -- a single short
+# prototype sentence is a noisy target for cosine similarity against real (often
+# keyword-poor, paraphrased) input text. Matching against several phrasings per domain
+# and taking the best (max-pooled) similarity is the standard fix for prototype-based
+# zero-shot classification. Includes "Growth" as its own domain -- it was previously
+# missing from this tier entirely (silently replaced by "General"), so any genuinely
+# Growth-related content could never be correctly classified by this tier no matter how
+# good the embeddings were. Shared by classify() and eval/calibrate_embedding_threshold.py
+# so the benchmark measures the exact same matching logic production uses.
+DOMAIN_PROTOTYPES: Dict[str, List[str]] = {
+    "Finance": [
+        "finance revenue profit margin cash flow ebitda",
+        "quarterly earnings, expenses, and profitability",
+        "we brought in more money and kept more of it after costs",
+        "balance sheet, income statement, and financial reporting",
+        "budget planning and cost control",
+        "money coming in and going out of the business",
+    ],
+    "Operations": [
+        "operations supply chain inventory logistics throughput",
+        "manufacturing efficiency and production capacity",
+        "goods moving through the warehouse and delivery network",
+        "process quality, defects, and cycle time",
+        "procurement and vendor management",
+        "how smoothly the day to day work gets done",
+    ],
+    "Growth": [
+        "growth marketing customer acquisition retention churn",
+        "new customer signups and expanding into new markets",
+        "how many people are trying the product and sticking with it",
+        "marketing campaigns, conversion rates, and word of mouth",
+        "recurring revenue and account expansion",
+        "winning new business and keeping existing customers longer",
+    ],
+    "People": [
+        "hr people employee turnover hiring retention",
+        "staff engagement, training, and workforce planning",
+        "hiring new team members and people leaving the company",
+        "compensation, benefits, and employee satisfaction",
+        "how happy and how long people stay working here",
+        "recruiting talent and building the team",
+    ],
+    "ESG": [
+        "esg sustainability carbon diversity governance",
+        "environmental impact and emissions reduction",
+        "corporate responsibility and board oversight",
+        "workplace safety and community impact",
+        "how the company treats the planet and its people fairly",
+        "diversity, ethics, and long-term stewardship",
+    ],
+    "IT_Ops": [
+        "it uptime latency incident deployment devops",
+        "system reliability and infrastructure performance",
+        "software releases, outages, and technical incidents",
+        "cybersecurity and data protection",
+        "keeping the servers and systems running smoothly",
+        "engineering velocity and platform stability",
+    ],
+    # "General" has two jobs: catch genuine corporate/business content that doesn't
+    # fit the other five domains, AND catch content that isn't business-related at
+    # all. Prototypes limited to "corporate news" phrasing lose that second job --
+    # cosine similarity between short embeddings and unrelated text sits in a
+    # nontrivial baseline band regardless of true relevance, so a narrowly-scoped
+    # General can be out-competed by another domain's vaguest prototype on totally
+    # off-topic input (e.g. "the weather is nice today" beating out to Operations'
+    # "how smoothly the day to day work gets done"). Mixing in genuinely unrelated,
+    # everyday phrasing gives General a fighting chance at winning that contest too.
+    "General": [
+        "general company update news announcement",
+        "corporate communications and press releases",
+        "leadership changes and strategic announcements",
+        "company culture and internal news",
+        "miscellaneous business update not tied to one department",
+        "broad organizational news",
+        "the weather, sports, or something unrelated to work",
+        "a personal message with nothing to do with the business",
+        "small talk or a topic that has nothing to do with any department",
+    ],
+}
+
+_PROTO_DOMAINS = list(DOMAIN_PROTOTYPES.keys())
+_FLAT_PROTOTYPES: List[str] = []
+_PROTO_DOMAIN_IDX: List[int] = []
+for _d_idx, _d in enumerate(_PROTO_DOMAINS):
+    for _p in DOMAIN_PROTOTYPES[_d]:
+        _FLAT_PROTOTYPES.append(_p)
+        _PROTO_DOMAIN_IDX.append(_d_idx)
+
+
+def _dot_product(v1, v2):
+    return sum(x * y for x, y in zip(v1, v2))
+
+
+def _magnitude(v):
+    return sum(x * x for x in v) ** 0.5
+
+
+def embedding_domain_match(content: str) -> Optional[Tuple[str, float, List[float]]]:
+    """Embed `content` and score it against every domain's prototypes, returning
+    (best_domain, best_similarity, content_embedding) -- max-pooled per domain across
+    that domain's prototype phrasings. The raw content embedding is returned too so
+    callers can persist it (e.g. the pgvector cache) without a second embed call.
+    Returns None if the remote embedding call didn't succeed. Does NOT apply
+    CLASSIFIER_EMBEDDING_THRESHOLD -- callers decide what to do with the raw score
+    (classify() thresholds it; the calibration script sweeps it)."""
+    inputs = [content[:500]] + _FLAT_PROTOTYPES
+    embeddings = _embed(inputs, model=settings.STREAMPULSE_EMBED_MODEL)
+    if not embeddings or len(embeddings) != len(inputs):
+        return None
+
+    content_emb = embeddings[0]
+    proto_embs = embeddings[1:]
+    c_mag = _magnitude(content_emb)
+
+    best_per_domain = [-1.0] * len(_PROTO_DOMAINS)
+    for p_emb, d_idx in zip(proto_embs, _PROTO_DOMAIN_IDX):
+        p_mag = _magnitude(p_emb)
+        if c_mag > 0 and p_mag > 0:
+            score = _dot_product(content_emb, p_emb) / (c_mag * p_mag)
+            if score > best_per_domain[d_idx]:
+                best_per_domain[d_idx] = score
+
+    best_score = -1.0
+    best_domain = "General"
+    for d_idx, score in enumerate(best_per_domain):
+        if score > best_score:
+            best_score = score
+            best_domain = _PROTO_DOMAINS[d_idx]
+    return best_domain, best_score, content_emb
+
+# Remote embedding host is a shared, modest-capacity inference box: it sleeps when
+# idle (a cold wake can take 60-120s) and can degrade under concurrent load from
+# other callers. A single short-timeout attempt can't tell "cold" apart from "down",
+# so the first attempt gets a generous budget and later attempts back off instead of
+# hammering a host that may still be waking up.
+_EMBED_TIMEOUTS = (60.0, 15.0)  # seconds, one per attempt
+_EMBED_BACKOFF_SECONDS = 2.0    # doubled between attempts
+
+
+def _is_valid_embedding(vec: Any) -> bool:
+    """Reject degenerate responses (wrong dimensionality, all-zero/near-constant
+    vectors) that would otherwise look like a successful call but aren't a genuine
+    BGE-M3 encoding — e.g. a misconfigured host silently returning a placeholder."""
+    if not isinstance(vec, (list, tuple)) or len(vec) != 1024:
+        return False
+    try:
+        floats = [float(x) for x in vec]
+    except (TypeError, ValueError):
+        return False
+    mean = sum(floats) / len(floats)
+    variance = sum((x - mean) ** 2 for x in floats) / len(floats)
+    return variance > 1e-8
+
 
 def _embed(inputs: List[str], model: str) -> List[List[float]]:
     """Encode `inputs` with a local sentence-transformers model (BGE by default).
     The model is loaded once per name and reused across calls.
-    If INFERENCE_MODE is remote, calls the HF Inference API to avoid OOM."""
-    
+    If INFERENCE_MODE is remote, calls the configured remote embedding host instead,
+    retrying with backoff to ride out cold starts / transient contention on that
+    shared host before giving up."""
+
     if settings.INFERENCE_MODE == "remote":
         url = settings.EMBEDDING_ENDPOINT
         if url:
@@ -63,30 +219,46 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
             h = {"Content-Type": "application/json", "User-Agent": "StreamPulse/1.0"}
             if settings.INFERENCE_TOKEN:
                 h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
-            
-            try:
-                # Use a tighter timeout to prevent threadpool exhaustion
-                with httpx.Client(timeout=15.0) as client:
-                    if "huggingface.co" in url:
-                        resp = client.post(url, json={"inputs": inputs}, headers=h)
-                        resp.raise_for_status()
-                        
-                        data = resp.json()
-                        # Simple feature extraction might return 3D arrays
-                        arr = np.asarray(data, dtype=float)
-                        if arr.ndim == 3:
-                            arr = arr.mean(axis=1)
-                        return arr.tolist()
-                    else:
-                        payload = {"texts": inputs, "model": model}
-                        resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
-                        resp.raise_for_status()
-                        return resp.json()["embeddings"]
-            except Exception as e:
-                log.warning("Remote embedding failed: %s", e)
-                # Do not fall back to local if it fails, to prevent OOM in memory-constrained environments.
-                # Just return an empty list or let it fail over.
-                return []
+
+            for attempt, timeout in enumerate(_EMBED_TIMEOUTS):
+                try:
+                    with httpx.Client(timeout=timeout) as client:
+                        if "huggingface.co" in url:
+                            resp = client.post(url, json={"inputs": inputs}, headers=h)
+                            resp.raise_for_status()
+
+                            data = resp.json()
+                            # Simple feature extraction might return 3D arrays
+                            arr = np.asarray(data, dtype=float)
+                            if arr.ndim == 3:
+                                arr = arr.mean(axis=1)
+                            result = arr.tolist()
+                        else:
+                            payload = {"texts": inputs, "model": model}
+                            resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
+                            resp.raise_for_status()
+                            result = resp.json()["embeddings"]
+
+                    if result and all(_is_valid_embedding(v) for v in result):
+                        return result
+                    log.warning(
+                        "Remote embedding attempt %d/%d returned a suspicious result "
+                        "(wrong shape or near-zero variance) -- treating as a failure",
+                        attempt + 1, len(_EMBED_TIMEOUTS),
+                    )
+                except Exception as e:
+                    log.warning(
+                        "Remote embedding attempt %d/%d failed: %s",
+                        attempt + 1, len(_EMBED_TIMEOUTS), e,
+                    )
+
+                if attempt < len(_EMBED_TIMEOUTS) - 1:
+                    time.sleep(_EMBED_BACKOFF_SECONDS * (2 ** attempt))
+
+            # Every attempt failed or returned a degenerate result.
+            # Do not fall back to local if it fails, to prevent OOM in memory-constrained environments.
+            # Just return an empty list or let it fail over.
+            return []
 
     from sentence_transformers import SentenceTransformer
 
@@ -636,37 +808,9 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 pg_cache = None
 
         try:
-            domains = ["Finance", "Operations", "People", "ESG", "IT_Ops", "General"]
-            prototypes = [
-                "finance revenue profit margin cash flow ebitda",
-                "operations supply chain inventory logistics throughput",
-                "hr people employee turnover hiring retention",
-                "esg sustainability carbon diversity governance",
-                "it uptime latency incident deployment devops",
-                "general company update news announcement",
-            ]
-            inputs = [content[:500]] + prototypes
-            embeddings = _embed(inputs, model=settings.STREAMPULSE_EMBED_MODEL)
-            if embeddings and len(embeddings) == len(inputs):
-                content_emb = embeddings[0]
-                proto_embs = embeddings[1:]
-                best_score = -1.0
-                best_domain = "General"
-
-                def dot_product(v1, v2):
-                    return sum(x * y for x, y in zip(v1, v2))
-
-                def magnitude(v):
-                    return sum(x * x for x in v) ** 0.5
-
-                c_mag = magnitude(content_emb)
-                for idx, p_emb in enumerate(proto_embs):
-                    p_mag = magnitude(p_emb)
-                    if c_mag > 0 and p_mag > 0:
-                        score = dot_product(content_emb, p_emb) / (c_mag * p_mag)
-                        if score > best_score:
-                            best_score = score
-                            best_domain = domains[idx]
+            match = embedding_domain_match(content or "")
+            if match is not None:
+                best_domain, best_score, content_emb = match
                 if best_score >= settings.CLASSIFIER_EMBEDDING_THRESHOLD:
                     result = {"domain": best_domain, "confidence": round(best_score, 3), "method": "vector_embedding"}
                     _cache_classification(content, result)
@@ -725,4 +869,6 @@ __all__ = [
     "_content_hash",
     "_get_cached_classification",
     "_cache_classification",
+    "embedding_domain_match",
+    "DOMAIN_PROTOTYPES",
 ]
