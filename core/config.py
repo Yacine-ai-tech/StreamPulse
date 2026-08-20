@@ -24,7 +24,11 @@ class Settings:
 
     POSTGRES_URL = os.getenv("POSTGRES_URL", "")
     LLM_DEFAULT = os.getenv("LLM_DEFAULT", "groq/openai/gpt-oss-120b")
-    LLM_JUDGE = os.getenv("LLM_JUDGE", "anthropic/claude-haiku-4-5")
+    # Matches LLM_DEFAULT's provider rather than Anthropic -- keeps the classifier's
+    # Tier-3 escalation on the same provider as the rest of the app by default, so a
+    # fresh deploy doesn't depend on a second provider's account/credits being set up
+    # separately. Override via LLM_JUDGE to point Tier 3 at a different model/provider.
+    LLM_JUDGE = os.getenv("LLM_JUDGE", "groq/openai/gpt-oss-120b")
 
     GROQ_API_KEY = os.getenv("GROQ_API_KEY", "")
     ANTHROPIC_API_KEY = os.getenv("ANTHROPIC_API_KEY", "")
@@ -50,7 +54,22 @@ class Settings:
 
     # ── Classifier Configuration ───────────────────────────────────────
     CLASSIFIER_KEYWORD_THRESHOLD = float(os.getenv("CLASSIFIER_KEYWORD_THRESHOLD", "0.7"))
-    CLASSIFIER_EMBEDDING_THRESHOLD = float(os.getenv("CLASSIFIER_EMBEDDING_THRESHOLD", "0.5"))
+    # Calibrated 2026-08-20 against eval/domain_calibration.jsonl (held out from the
+    # reported benchmark set) using real embedding scores now that the remote host's
+    # wake-retry client actually works (see pipeline/classifier.py's _embed()). Raw
+    # cosine-similarity scores for CORRECT top-1 matches ranged ~0.54-0.71; scores for
+    # CONFIDENT-BUT-WRONG matches (mostly ESG paraphrases embedding closer to Finance/
+    # Operations/IT_Ops prototypes than to ESG's own) topped out at 0.62. There is no
+    # threshold that perfectly separates the two -- the ranges overlap -- so this is set
+    # above every observed wrong-but-confident score (with a safety margin) rather than
+    # at eval/calibrate_embedding_threshold.py's own "best F1" sweep result: that
+    # script's methodology scores each threshold as if a below-threshold example gets
+    # predicted "General", which is never the true label in this calibration set, so it
+    # rewards a low threshold that fires on everything -- it doesn't model the real
+    # cascade, where a below-threshold example instead defers to Tier 3 (LLM), a safer
+    # fallback than a confident-but-wrong Tier 2 answer. Rerun the calibration script
+    # (data only, not its threshold pick) if domain_packs/ prototypes change materially.
+    CLASSIFIER_EMBEDDING_THRESHOLD = float(os.getenv("CLASSIFIER_EMBEDDING_THRESHOLD", "0.65"))
     CLASSIFIER_LLM_CONFIDENCE = float(os.getenv("CLASSIFIER_LLM_CONFIDENCE", "0.7"))
     CLASSIFIER_ENABLE_CACHE = os.getenv("CLASSIFIER_ENABLE_CACHE", "true").lower() in ("1", "true", "yes")
     STREAMPULSE_HYBRID_LLM = os.getenv("STREAMPULSE_HYBRID_LLM", "1")
