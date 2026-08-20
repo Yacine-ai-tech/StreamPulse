@@ -34,5 +34,5 @@ database.
 sustained (non-burst) throughput, ramped load, or behavior with more than one instance or a paid
 plan. The security layer (HMAC rejection of invalid signatures) was not exercised meaningfully in
 this particular run because almost every request — valid or invalid — failed the same way under
-overload; see `eval/WEBHOOK_BENCHMARK.md` for a dedicated, unsaturated measurement of signature
-verification correctness.
+overload; a dedicated, unsaturated measurement of signature verification correctness (well below
+this test's failure threshold) is a natural follow-up, not yet published here.
