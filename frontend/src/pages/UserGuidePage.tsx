@@ -74,16 +74,22 @@ export default function UserGuidePage() {
             Defined in <code>pipeline/classifier.py</code>, the classifier escalates through up to three tiers per
             record, stopping as soon as one is confident enough:
           </p>
+          <p className="text-sm text-gray-300 mb-4">
+            The classifier has no built-in notion of what a "domain" is — the taxonomy comes from a
+            configurable <code>STREAMPULSE_DOMAIN_PACK</code> (see <code>domain_packs/</code>), defaulting to a
+            bundled 6-domain reference pack (Finance, Growth, Operations, People, ESG, IT_Ops).
+          </p>
           <ol className="space-y-3 text-sm text-gray-300 list-decimal list-inside mb-4">
-            <li><span className="font-semibold text-gray-100">Tier 1 — Keyword matching.</span> Scores text against per-domain keyword lists across 6 domains (Finance, Growth, Operations, People, ESG, IT_Ops). Returns immediately once confidence ≥ 0.5. Free, near-instant.</li>
-            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Opt-in via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and compares it against 6 domain prototype sentences by cosine similarity.</li>
-            <li><span className="font-semibold text-gray-100">Tier 3 — LLM zero-shot escalation.</span> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (Claude Haiku by default, via <code>LLM_JUDGE</code>) to pick one of the 6 labels when the earlier tiers aren't confident.</li>
+            <li><span className="font-semibold text-gray-100">Tier 1 — Keyword matching.</span> Scores text against per-domain keyword lists from the configured domain pack. Returns immediately once confidence ≥ 0.7. Free, near-instant.</li>
+            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Opt-in via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and compares it against the domain pack's prototype sentences by cosine similarity, committing only above <code>CLASSIFIER_EMBEDDING_THRESHOLD</code> (default 0.65 — calibrated to favor precision, deferring uncertain cases to Tier 3 rather than risk a confident wrong answer).</li>
+            <li><span className="font-semibold text-gray-100">Tier 3 — LLM zero-shot escalation.</span> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (via <code>LLM_JUDGE</code>) to pick one of the domain pack's labels when the earlier tiers aren't confident.</li>
           </ol>
 
           <h3 className="font-semibold text-lg text-gray-100 mb-2">Measured accuracy (real benchmark)</h3>
           <p className="text-sm text-gray-300 mb-3">
-            <code>eval/CLASSIFIER_BENCHMARK.md</code> reports a real run (2026-06-17) against{' '}
-            <code>eval/domain_labeled.jsonl</code> — 24 hand-written examples across the 6 domains, deliberately{' '}
+            <code>eval/CLASSIFIER_BENCHMARK.md</code> reports a real run (2026-08-20) against{' '}
+            <code>eval/domain_labeled.jsonl</code> — 48 hand-written examples across the bundled reference domain
+            pack's 6 domains, deliberately{' '}
             <span className="italic">paraphrased to avoid the literal domain keywords</span> (e.g. "we brought in
             more money and kept more of it after bills" instead of "revenue/profit"), so the benchmark measures what
             each tier adds rather than rewarding a self-aligned keyword list:
@@ -105,28 +111,30 @@ export default function UserGuidePage() {
                 </tr>
                 <tr className="border-t border-gray-700">
                   <td className="p-3">Keyword → Vector embedding (Tier 2)</td>
-                  <td className="p-3 font-mono text-amber-300">20.8%</td>
-                  <td className="p-3 font-mono text-gray-400">0.253</td>
+                  <td className="p-3 font-mono text-amber-300">64.6%</td>
+                  <td className="p-3 font-mono text-gray-400">0.549</td>
                 </tr>
                 <tr className="border-t border-gray-700">
                   <td className="p-3">Keyword → Embedding → LLM escalation (Tier 3)</td>
-                  <td className="p-3 font-mono text-green-400">100.0%</td>
-                  <td className="p-3 font-mono text-green-400">1.000</td>
+                  <td className="p-3 font-mono text-green-400">91.7%</td>
+                  <td className="p-3 font-mono text-green-400">0.793</td>
                 </tr>
               </tbody>
             </table>
           </div>
           <p className="text-sm text-gray-300 mb-2">
             <span className="font-semibold text-gray-100">Headline:</span> on realistic keyword-poor text, plain
-            keyword matching collapses to 8.3% while the full hybrid pipeline recovers it to 100.0% — the measured
+            keyword matching collapses to 8.3% while the full hybrid pipeline recovers it to 91.7% — the measured
             justification for paying for the LLM tier at all.
           </p>
           <p className="text-xs text-gray-400 leading-relaxed">
             <span className="font-semibold">Honest caveat (from the benchmark doc itself):</span> real streams are a
             mix of keyword-rich and keyword-poor text, so keyword-only would score well above 8.3% in production,
-            and the LLM tier is opt-in and costs per call. The 24-example set is small and curated — treat 100.0% as
-            "clearly separable on a small clean set," not a production guarantee. The embedding tier's 20.8% reflects
-            real calls to a remote inference host and is sensitive to that host's availability at request time.
+            and the LLM tier is opt-in and costs per call. The 48-example set is small and curated — treat 91.7% as
+            "strongly separable on a small clean set," not a production guarantee. The embedding tier's threshold is
+            calibrated to favor precision over recall, deferring uncertain cases to the LLM tier rather than risking
+            a confident wrong answer — most of the gap between the 64.6% vector-only row and the 91.7% full-hybrid
+            row is exactly those deferred cases being correctly resolved by Tier 3.
             Reproduce with{' '}
             <code>python eval/run_classifier_benchmark.py</code> and{' '}
             <code>STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py</code>.

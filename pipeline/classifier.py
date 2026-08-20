@@ -1,12 +1,15 @@
 """
 Real-Time Data Pipeline — Live ingestion from email, sheets, webhooks, APIs.
 
-Integrates with all domain services (Finance, HR, Operations, Logistics, IT, ESG)
-to provide streaming data updates with automatic routing, transformation, and storage.
+Domain- and data-agnostic: the pipeline has no built-in notion of "Finance" or
+"HR". Records are routed against whichever domain taxonomy is configured via a
+domain pack (see domain_packs/, STREAMPULSE_DOMAIN_PACK). The bundled demo pack
+(Finance, Operations, Growth, People, ESG, IT_Ops) is one example configuration,
+not a fixed schema -- swap in a pack for any other set of domains.
 
 FEATURES:
 - Multi-source data ingestion (Gmail, Sheets, N8N, Webhooks, APIs)
-- Auto-classification to domains (Finance, HR, Operations, etc.)
+- Auto-classification to a configurable domain taxonomy
 - Real-time validation & transformation
 - Duplicate detection & merging
 - Anomaly detection & alerts
@@ -54,81 +57,53 @@ _embedder_cache: Dict[str, Any] = {}
 # prototype sentence is a noisy target for cosine similarity against real (often
 # keyword-poor, paraphrased) input text. Matching against several phrasings per domain
 # and taking the best (max-pooled) similarity is the standard fix for prototype-based
-# zero-shot classification. Includes "Growth" as its own domain -- it was previously
-# missing from this tier entirely (silently replaced by "General"), so any genuinely
-# Growth-related content could never be correctly classified by this tier no matter how
-# good the embeddings were. Shared by classify() and eval/calibrate_embedding_threshold.py
+# zero-shot classification. Shared by classify() and eval/calibrate_embedding_threshold.py
 # so the benchmark measures the exact same matching logic production uses.
-DOMAIN_PROTOTYPES: Dict[str, List[str]] = {
-    "Finance": [
-        "finance revenue profit margin cash flow ebitda",
-        "quarterly earnings, expenses, and profitability",
-        "we brought in more money and kept more of it after costs",
-        "balance sheet, income statement, and financial reporting",
-        "budget planning and cost control",
-        "money coming in and going out of the business",
-    ],
-    "Operations": [
-        "operations supply chain inventory logistics throughput",
-        "manufacturing efficiency and production capacity",
-        "goods moving through the warehouse and delivery network",
-        "process quality, defects, and cycle time",
-        "procurement and vendor management",
-        "how smoothly the day to day work gets done",
-    ],
-    "Growth": [
-        "growth marketing customer acquisition retention churn",
-        "new customer signups and expanding into new markets",
-        "how many people are trying the product and sticking with it",
-        "marketing campaigns, conversion rates, and word of mouth",
-        "recurring revenue and account expansion",
-        "winning new business and keeping existing customers longer",
-    ],
-    "People": [
-        "hr people employee turnover hiring retention",
-        "staff engagement, training, and workforce planning",
-        "hiring new team members and people leaving the company",
-        "compensation, benefits, and employee satisfaction",
-        "how happy and how long people stay working here",
-        "recruiting talent and building the team",
-    ],
-    "ESG": [
-        "esg sustainability carbon diversity governance",
-        "environmental impact and emissions reduction",
-        "corporate responsibility and board oversight",
-        "workplace safety and community impact",
-        "how the company treats the planet and its people fairly",
-        "diversity, ethics, and long-term stewardship",
-    ],
-    "IT_Ops": [
-        "it uptime latency incident deployment devops",
-        "system reliability and infrastructure performance",
-        "software releases, outages, and technical incidents",
-        "cybersecurity and data protection",
-        "keeping the servers and systems running smoothly",
-        "engineering velocity and platform stability",
-    ],
-    # "General" has two jobs: catch genuine corporate/business content that doesn't
-    # fit the other five domains, AND catch content that isn't business-related at
-    # all. Prototypes limited to "corporate news" phrasing lose that second job --
-    # cosine similarity between short embeddings and unrelated text sits in a
-    # nontrivial baseline band regardless of true relevance, so a narrowly-scoped
-    # General can be out-competed by another domain's vaguest prototype on totally
-    # off-topic input (e.g. "the weather is nice today" beating out to Operations'
-    # "how smoothly the day to day work gets done"). Mixing in genuinely unrelated,
-    # everyday phrasing gives General a fighting chance at winning that contest too.
-    "General": [
-        "general company update news announcement",
-        "corporate communications and press releases",
-        "leadership changes and strategic announcements",
-        "company culture and internal news",
-        "miscellaneous business update not tied to one department",
-        "broad organizational news",
-        "the weather, sports, or something unrelated to work",
-        "a personal message with nothing to do with the business",
-        "small talk or a topic that has nothing to do with any department",
-    ],
-}
+#
+# The actual domain taxonomy is NOT hardcoded here -- it's loaded from a domain pack
+# (see domain_packs/README.md, STREAMPULSE_DOMAIN_PACK), so a deployment can classify
+# against any set of domains, not just the bundled business-function demo pack. The
+# demo pack's own "General" catch-all has two jobs worth keeping in mind when writing
+# a custom pack: catch genuine content that doesn't fit any other domain, AND catch
+# content that isn't relevant to the taxonomy at all. A catch-all scoped only to
+# on-topic-but-uncategorized phrasing loses that second job -- cosine similarity
+# between short embeddings and unrelated text sits in a nontrivial baseline band
+# regardless of true relevance, so a narrowly-scoped catch-all can be out-competed by
+# another domain's vaguest prototype on totally off-topic input. Mixing in genuinely
+# unrelated, everyday phrasing gives the catch-all a fighting chance at winning that
+# contest too.
+_DOMAIN_PACKS_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "domain_packs")
+_DEFAULT_DOMAIN_PACK_PATH = os.path.join(_DOMAIN_PACKS_DIR, "demo_business.json")
+
+
+def _load_domain_prototypes() -> Dict[str, List[str]]:
+    pack_path = os.getenv("STREAMPULSE_DOMAIN_PACK", "") or _DEFAULT_DOMAIN_PACK_PATH
+    try:
+        import json
+        with open(pack_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+        valid = (
+            isinstance(data, dict) and data and all(
+                isinstance(domain, str) and isinstance(prototypes, list) and prototypes
+                and all(isinstance(p, str) for p in prototypes)
+                for domain, prototypes in data.items()
+            )
+        )
+        if valid:
+            return data
+        log.warning("Domain pack at %s is malformed (expected {domain: [phrases]}), "
+                    "falling back to bundled demo pack", pack_path)
+    except Exception as e:
+        log.warning("Failed to load domain pack from %s (%s), falling back to bundled demo pack",
+                    pack_path, e)
+
+    if pack_path != _DEFAULT_DOMAIN_PACK_PATH:
+        with open(_DEFAULT_DOMAIN_PACK_PATH, "r", encoding="utf-8") as f:
+            return json.load(f)
+    raise RuntimeError(f"Bundled default domain pack is missing or unreadable: {_DEFAULT_DOMAIN_PACK_PATH}")
+
+
+DOMAIN_PROTOTYPES: Dict[str, List[str]] = _load_domain_prototypes()
 
 _PROTO_DOMAINS = list(DOMAIN_PROTOTYPES.keys())
 _FLAT_PROTOTYPES: List[str] = []
@@ -180,13 +155,25 @@ def embedding_domain_match(content: str) -> Optional[Tuple[str, float, List[floa
             best_domain = _PROTO_DOMAINS[d_idx]
     return best_domain, best_score, content_emb
 
-# Remote embedding host is a shared, modest-capacity inference box: it sleeps when
-# idle (a cold wake can take 60-120s) and can degrade under concurrent load from
-# other callers. A single short-timeout attempt can't tell "cold" apart from "down",
-# so the first attempt gets a generous budget and later attempts back off instead of
-# hammering a host that may still be waking up.
-_EMBED_TIMEOUTS = (60.0, 15.0)  # seconds, one per attempt
-_EMBED_BACKOFF_SECONDS = 2.0    # doubled between attempts
+# Remote embedding host is a shared, on-demand GPU box (see sibling projects'
+# clients -- IntelAI's hybrid_retrieval.py, DocIntel's services/route_b.py -- which
+# already solved this exact problem the same way): it does NOT hold a request open
+# while it boots. A stopped host answers an early request quickly with an error body
+# signalling a wake was triggered (a `_woke` flag, or -- since this endpoint's HTTP
+# wrapper collapses the structured error to a plain string -- the substring "_woke",
+# "530", "waking", or "cold" inside it) rather than blocking for the ~2-5 minutes a
+# real cold boot takes. So a short per-attempt timeout is the wrong axis to tune --
+# what matters is a long TOTAL budget, polled periodically, that distinguishes "still
+# waking, keep waiting" from "genuinely broken, stop and report it".
+_EMBED_WAKE_BUDGET_SECONDS = float(os.getenv("INFERENCE_WAKE_TIMEOUT", "420"))
+_EMBED_POLL_DELAY_SECONDS = float(os.getenv("INFERENCE_RETRY_DELAY", "15"))
+_EMBED_PER_ATTEMPT_TIMEOUT = 30.0
+_WAKING_HINTS = ("_woke", "530", "waking", "cold")
+
+
+def _looks_like_still_waking(text: str) -> bool:
+    t = (text or "").lower()
+    return any(hint in t for hint in _WAKING_HINTS)
 
 
 def _is_valid_embedding(vec: Any) -> bool:
@@ -208,8 +195,8 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
     """Encode `inputs` with a local sentence-transformers model (BGE by default).
     The model is loaded once per name and reused across calls.
     If INFERENCE_MODE is remote, calls the configured remote embedding host instead,
-    retrying with backoff to ride out cold starts / transient contention on that
-    shared host before giving up."""
+    polling through a cold start (see _EMBED_WAKE_BUDGET_SECONDS above) rather than
+    giving up on the first one or two quick attempts."""
 
     if settings.INFERENCE_MODE == "remote":
         url = settings.EMBEDDING_ENDPOINT
@@ -220,11 +207,17 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
             if settings.INFERENCE_TOKEN:
                 h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
 
-            for attempt, timeout in enumerate(_EMBED_TIMEOUTS):
+            deadline = time.monotonic() + _EMBED_WAKE_BUDGET_SECONDS
+            attempt = 0
+            last_desc = "unknown"
+            while True:
+                attempt += 1
+                resp = None
                 try:
-                    with httpx.Client(timeout=timeout) as client:
+                    with httpx.Client(timeout=_EMBED_PER_ATTEMPT_TIMEOUT) as client:
                         if "huggingface.co" in url:
                             resp = client.post(url, json={"inputs": inputs}, headers=h)
+                            body_text = resp.text
                             resp.raise_for_status()
 
                             data = resp.json()
@@ -236,29 +229,49 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                         else:
                             payload = {"texts": inputs, "model": model}
                             resp = client.post(url.rstrip("/") + "/embed", json=payload, headers=h)
+                            body_text = resp.text
                             resp.raise_for_status()
                             result = resp.json()["embeddings"]
 
                     if result and all(_is_valid_embedding(v) for v in result):
+                        if attempt > 1:
+                            log.info("Remote embedding ready after %d attempt(s)", attempt)
                         return result
-                    log.warning(
-                        "Remote embedding attempt %d/%d returned a suspicious result "
-                        "(wrong shape or near-zero variance) -- treating as a failure",
-                        attempt + 1, len(_EMBED_TIMEOUTS),
-                    )
+                    last_desc = "response had wrong shape or near-zero variance"
                 except Exception as e:
+                    status_code = getattr(resp, "status_code", None) if resp is not None else None
+                    body_text = (getattr(resp, "text", "") or "") if resp is not None else ""
+                    last_desc = f"{type(e).__name__}: {e}"
+                    # This endpoint's HTTP wrapper (app.py's /embed route) always answers
+                    # 503 for every internal failure mode of the wake protocol -- a
+                    # genuinely-still-waking studio, "no_studio_available", an origin
+                    # error from a studio mid-boot -- not just the ones whose error text
+                    # happens to contain a recognizable substring. So a 503 from THIS
+                    # host is always worth continuing to poll for; only a different
+                    # status code (auth, bad request, etc.) or a body that doesn't even
+                    # look wake-shaped on a non-503 response should fail fast.
+                    is_503 = status_code == 503
+                    if not is_503 and body_text and not _looks_like_still_waking(body_text) and not _looks_like_still_waking(last_desc):
+                        # A real, specific error (bad request, auth failure, etc.) --
+                        # not the shared host waking up. No point burning the wake
+                        # budget retrying something a retry can't fix.
+                        log.warning("Remote embedding failed with a non-wake error, not retrying further: %s", last_desc)
+                        return []
+
+                remaining = deadline - time.monotonic()
+                if remaining <= 0:
                     log.warning(
-                        "Remote embedding attempt %d/%d failed: %s",
-                        attempt + 1, len(_EMBED_TIMEOUTS), e,
+                        "Remote embedding: host still not ready after %.0fs (%d attempts). Last: %s",
+                        _EMBED_WAKE_BUDGET_SECONDS, attempt, last_desc,
                     )
-
-                if attempt < len(_EMBED_TIMEOUTS) - 1:
-                    time.sleep(_EMBED_BACKOFF_SECONDS * (2 ** attempt))
-
-            # Every attempt failed or returned a degenerate result.
-            # Do not fall back to local if it fails, to prevent OOM in memory-constrained environments.
-            # Just return an empty list or let it fail over.
-            return []
+                    # Do not fall back to local if remote never came up, to prevent OOM
+                    # in memory-constrained environments. Let the caller degrade instead.
+                    return []
+                log.info(
+                    "Remote embedding: host still waking (attempt %d, %s) -- retrying in %.0fs "
+                    "(%.0fs of budget left)", attempt, last_desc, min(_EMBED_POLL_DELAY_SECONDS, remaining), remaining,
+                )
+                time.sleep(min(_EMBED_POLL_DELAY_SECONDS, max(remaining, 0)))
 
     from sentence_transformers import SentenceTransformer
 
