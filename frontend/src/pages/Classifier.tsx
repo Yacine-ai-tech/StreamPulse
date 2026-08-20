@@ -34,8 +34,8 @@ export default function Classifier() {
 
       <div className="mt-5 grid gap-4 sm:grid-cols-4">
         <StatTile label="Keyword tier alone" value="8.3%" sub="accuracy on keyword-poor text" delta={{ text: "collapses", good: false }} icon={Split} />
-        <StatTile label="+ Vector embedding" value="54.0%" sub="same 24-example benchmark" delta={{ text: "partial recovery" }} />
-        <StatTile label="+ LLM escalation" value="91.7%" sub="full 3-tier hybrid" delta={{ text: "recovers most of it" }} />
+        <StatTile label="+ Vector embedding" value="20.8%" sub="same 24-example benchmark" delta={{ text: "partial recovery" }} />
+        <StatTile label="+ LLM escalation" value="100.0%" sub="full 3-tier hybrid" delta={{ text: "recovers the rest" }} />
         <StatTile label="Domains" value="6" sub="Finance · Growth · Operations · People · ESG · IT_Ops" />
       </div>
 
@@ -45,8 +45,10 @@ export default function Classifier() {
           keywords, so it measures the value of the embedding and LLM tiers rather than a
           self-aligned keyword list. The published caveats apply here too: real streams mix
           keyword-rich and keyword-poor text (keyword-only scores far above 8% in production), the
-          LLM tier is opt-in and costs per call, and 91.7% on a small curated set means "clearly
-          separable on a small clean set", not a production guarantee.
+          LLM tier is opt-in and costs per call, and 100% on a small curated set means "clearly
+          separable on a small clean set", not a production guarantee. The embedding tier calls a
+          remote inference host, so its score reflects that host's real availability during the run
+          rather than a best-case number.
           Reproduce with <code className="font-mono text-[12px]">python eval/run_classifier_benchmark.py</code>{" "}
           (keyword-only) or <code className="font-mono text-[12px]">STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py</code>{" "}
           (full hybrid, needs an LLM key).
