@@ -25,7 +25,6 @@ sys.path.insert(0, str(ROOT))
 
 
 def main():
-    from sklearn.metrics import f1_score
     from pipeline.classifier import embedding_domain_match
 
     rows = [json.loads(l) for l in open(ROOT / "eval" / "domain_calibration.jsonl") if l.strip()]
@@ -52,23 +51,40 @@ def main():
 
     print(f"\n{len(raw_scores)}/{len(rows)} calibration examples scored successfully.\n")
 
+    # A below-threshold example does NOT get predicted "General" in the real cascade --
+    # it defers to Tier 3 (LLM), a generally strong fallback. So the metric that matters
+    # here isn't accuracy/F1 as if "General" were the fallback label (that trivially
+    # rewards a low threshold, since it never penalizes accepting a wrong match instead
+    # of deferring). What matters is: of the examples Tier 2 is confident enough to
+    # answer at each threshold (the "accepted set"), what fraction does it get right
+    # (precision)? A threshold should be chosen high enough that the accepted set's
+    # precision is trustworthy -- errors there are Tier 2 confidently overriding a tier
+    # (LLM) that would likely have been correct, which is strictly worse than deferring.
+    print(f"{'threshold':>10} | {'accepted':>8} | {'correct':>7} | precision")
+    print("-" * 48)
     best_threshold = None
-    best_f1 = -1.0
-    print(f"{'threshold':>10} | {'macro-F1':>9} | accuracy")
-    print("-" * 40)
     for step in range(5, 96, 5):  # 0.05 .. 0.95
         threshold = step / 100.0
-        y_pred = [domain if score >= threshold else "General" for domain, score in raw_scores]
-        f1 = f1_score(y_true, y_pred, average="macro", zero_division=0)
-        acc = sum(1 for t, p in zip(y_true, y_pred) if t == p) / len(y_true)
+        accepted = [(d, t) for (d, s), t in zip(raw_scores, y_true) if s >= threshold]
+        n = len(accepted)
+        correct = sum(1 for d, t in accepted if d == t)
+        precision = correct / n if n else float("nan")
         marker = ""
-        if f1 > best_f1:
-            best_f1 = f1
+        # First threshold (scanning upward) where every accepted example in this small
+        # calibration sample is correct -- a necessary, not sufficient, bar; still
+        # cross-check against a larger/live sample before trusting it blindly.
+        if best_threshold is None and n > 0 and correct == n:
             best_threshold = threshold
-            marker = "  <-- best so far"
-        print(f"{threshold:>10.2f} | {f1:>9.3f} | {acc:.3f}{marker}")
+            marker = "  <-- first perfect-precision threshold"
+        print(f"{threshold:>10.2f} | {n:>8d} | {correct:>7d} | {precision:.3f}{marker}" if n else
+              f"{threshold:>10.2f} | {n:>8d} | {correct:>7d} |    n/a")
 
-    print(f"\nRecommended CLASSIFIER_EMBEDDING_THRESHOLD = {best_threshold} (macro-F1={best_f1:.3f} on calibration set)")
+    if best_threshold is not None:
+        print(f"\nRecommended CLASSIFIER_EMBEDDING_THRESHOLD = {best_threshold} "
+              f"(first threshold with 100% precision on the accepted set)")
+    else:
+        print("\nNo threshold in the sweep reached 100% precision on the accepted set -- "
+              "the domain prototypes likely need improving, not just the threshold.")
 
 
 if __name__ == "__main__":
