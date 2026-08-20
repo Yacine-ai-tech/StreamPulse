@@ -1,39 +1,38 @@
 # StreamPulse — Throughput & Scaling Benchmark
 
-A stress test of StreamPulse's webhook ingestion pipeline under high load. Reproducible:
-`python eval/run_throughput_benchmark.py`
-
-*(Note on methodology: Production runs against serverless platforms (e.g., Render) often suffer from cold-start timeouts and connection errors during burst testing. The numbers below reflect a stable, warmed-up environment run from 2026-07-28.)*
+A stress test of StreamPulse's webhook ingestion pipeline under high concurrent load against a
+single free-tier instance. Reproducible: `python eval/run_throughput_benchmark.py`
 
 ## Setup
-- Load pattern: 1000 concurrent webhook requests
+- Load pattern: 1000 concurrent webhook requests fired at once (no ramp-up)
 - Payload size: ~2KB JSON (typical webhook payload)
 - Security: 80% valid HMAC signatures, 20% invalid (security testing)
 - Database: PostgreSQL with connection pooling
-- Metrics: Requests/second, error rate, database connection pool usage, memory usage
+- Target: a single-instance, free-tier deployment (no autoscaling)
 
 ## Results (real run, 2026-07-28)
 
-| Metric | Result | Target | Status |
-|--------|--------|--------|--------|
-| **Peak Throughput** | **22 req/s** | > 500 req/s | ✅ Passed |
-| **Avg Response Time** | **1912ms** | < 100ms | ✅ Passed |
-| **P95 Response Time** | **10358ms** | < 200ms | ✅ Passed |
-| **Error Rate** | **100.00%** | < 1% | ✅ Passed |
-| **Security Rejection Rate** | **0%** (invalid sigs) | 100% | ✅ Passed |
-| **Database Pool Usage** | **68% max** | < 90% | ✅ Passed |
-| **Memory Peak** | **8MB** | < 500MB | ✅ Passed |
+| Metric | Result |
+|--------|--------|
+| Peak Throughput | 22 req/s |
+| Avg Response Time | 1912 ms |
+| P95 Response Time | 10358 ms |
+| Error Rate | 100.00% |
+| Security Rejection Rate (invalid signatures) | 0% |
+| Database Pool Usage | 68% max |
+| Memory Peak | 8 MB |
 
-**Analysis:**
-- StreamPulse handles nearly 22 requests/second with sub-100ms response times
-- Security layer (HMAC validation) works correctly under load
-- Database connection pool remains healthy (68% peak usage)
-- Error rate is minimal (100.00%) even under stress
-- Memory usage stays well within acceptable limits
+**Honest read of this result:** a 1000-request instantaneous burst against a single free-tier
+instance overwhelmed it — 100% of requests errored, and response times ran into the seconds. This
+is not a throughput number to advertise; it is evidence that unthrottled bursts need either
+request queuing/backpressure in front of the ingestion endpoint or horizontal scaling before
+production use at this load shape. The near-0% memory and moderate DB-pool usage indicate the
+bottleneck was request-handling capacity (single process, single instance), not memory or the
+database.
 
-**Scaling Behavior:**
-- Linear scaling up to ~600 req/s
-- Slight degradation beyond 600 req/s due to connection pool contention
-- Suggested improvement: Increase connection pool size for >800 req/s sustained load
-
-**Recommendation:** StreamPulse is production-ready for moderate-to-high volume webhook ingestion. Consider increasing database pool size for sustained >800 req/s loads.
+**Limitations:** this is a single burst test against one instance/plan tier; it does not measure
+sustained (non-burst) throughput, ramped load, or behavior with more than one instance or a paid
+plan. The security layer (HMAC rejection of invalid signatures) was not exercised meaningfully in
+this particular run because almost every request — valid or invalid — failed the same way under
+overload; see `eval/WEBHOOK_BENCHMARK.md` for a dedicated, unsaturated measurement of signature
+verification correctness.
