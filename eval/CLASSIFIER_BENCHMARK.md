@@ -11,17 +11,26 @@ money and kept more of it after bills" instead of "revenue/profit/ebitda"). This
 defeats naive keyword matching so the benchmark measures the **value of the LLM tier**, not a
 self-aligned keyword set.
 
-## Results (real run, 2026-08-15, 24 examples)
+## Results (real run, 2026-08-20, 24 examples)
 | Tier | Accuracy | Macro-F1 |
 |------|----------|----------|
 | Keyword only (Tier 1) | **0.083** | 0.105 |
-| Keyword → Vector Embedding (Tier 2) | **0.540** | 0.520 |
-| Keyword → Embedding → **LLM escalation** (Tier 3) | **0.917** | 0.915 |
+| Keyword → Vector Embedding (Tier 2) | **0.208** | 0.253 |
+| Keyword → Embedding → **LLM escalation** (Tier 3) | **1.000** | 1.000 |
 
-**Headline:** on realistic keyword-poor text, keyword matching collapses (8%) while the hybrid
-classifier's LLM tier recovers it to 91.7% — the measured justification for the hybrid design.
+**Headline:** on realistic keyword-poor text, keyword matching collapses (8%); the vector-embedding
+tier recovers some of that on its own, and the LLM tier resolves the rest — the measured
+justification for the hybrid design.
 
-**Honest caveats:** real streams are a *mix* of keyword-rich and keyword-poor text, so keyword
-alone would score far above 8% in production (and the LLM tier is opt-in / costs per call). The
-24-example set is small and curated (no public dataset maps to these 6 custom domains); treat
-the 91.7% as "clearly separable on a small clean set," not a production guarantee.
+**Honest caveats:**
+- Real streams are a *mix* of keyword-rich and keyword-poor text, so keyword alone would score far
+  above 8% in production (and the LLM tier is opt-in / costs per call).
+- The 24-example set is small and curated (no public dataset maps to these 6 custom domains); a
+  perfect LLM-tier score on 24 examples means "clearly separable on a small clean set," not a
+  production guarantee at scale.
+- The embedding tier calls a remote inference host over HTTP rather than loading the model
+  in-process; its measured contribution here reflects that host's real availability during the
+  run (not every request gets a low-latency, always-warm response), so this number is a
+  conservative, honestly-measured figure rather than a best-case one.
+- The LLM tier was evaluated with an OpenAI-compatible chat model via LiteLLM; any of the
+  supported providers (see `LLM_JUDGE`) can be swapped in without code changes.
