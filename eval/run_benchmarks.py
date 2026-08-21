@@ -18,7 +18,7 @@ STREAMPULSE_ROOT = Path(__file__).resolve().parents[1]
 def run_streampulse_benchmarks(seed: int = 42):
     random.seed(seed)
     print("==================================================")
-    print(f"🔬 StreamPulse Research Benchmark Suite (Seed: {seed})")
+    print(f"StreamPulse Research Benchmark Suite (Seed: {seed})")
     print("==================================================")
 
     results = {

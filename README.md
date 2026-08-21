@@ -2,7 +2,7 @@
 [![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml) [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
 
 **Real-time business data pipeline. 6+ source types, live dashboard, first-class n8n integration.**
-> 🔗 **Live dashboard:** https://streampulse.ysiddo-ai-projects.app/  ·  live stream at `/live/sse`.
+> **Live dashboard:** https://streampulse.ysiddo-ai-projects.app/  ·  live stream at `/live/sse`.
 > Self-hosting: see [SELF_HOSTING.md](SELF_HOSTING.md).
 
 ## What It Does
@@ -91,7 +91,7 @@ pytest tests/ -q
 
 StreamPulse provides research-proof event streaming standards:
 - **Dynamic Sliding-Window Context Assembly**: Continuous temporal sliding window $W_\tau(t)$ maintenance for real-time streaming RAG context generation.
-- **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load ($>500\text{ events/sec}$).
+- **Adaptive Token-Bucket Backpressure Router**: Dynamic rate control algorithm preventing downstream LLM queue starvation under burst load; measured peak sustained throughput is 22 req/s (see `eval/THROUGHPUT_BENCHMARK.md`).
 - **Isolated Storage Architecture**: Separate dedicated PostgreSQL database instance (`sp_` prefixed schemas).
 - **Content Hash Caching**: SHA-256 based classification result caching for performance optimization.
 - **Hybrid Classification Analysis**: Comparative study of keyword vs embedding vs LLM classification accuracy and latency.
