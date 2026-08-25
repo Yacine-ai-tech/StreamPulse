@@ -10,7 +10,7 @@ scoring path production uses -- then sweeps candidate thresholds and reports the
 that maximizes macro-F1 on this calibration set.
 
 Usage: python eval/calibrate_embedding_threshold.py
-Needs: scikit-learn (metrics), and the same EMBEDDING_ENDPOINT/INFERENCE_TOKEN
+Needs: scikit-learn (metrics), and the same EMBEDDING_ENDPOINT/EMBED_TOKEN
 production uses (set via env or .env).
 """
 from __future__ import annotations
