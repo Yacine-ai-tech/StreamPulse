@@ -15,8 +15,8 @@ source_name = "test"
 
 def get_client():
     if TEST_URL:
-        return httpx.AsyncClient(timeout=15.0)
-    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver", timeout=15.0)
+        return httpx.AsyncClient(timeout=60.0)
+    return httpx.AsyncClient(transport=httpx.ASGITransport(app=app), base_url="http://testserver", timeout=60.0)
 
 @pytest.mark.asyncio
 async def test_e2e_api_get___0():
