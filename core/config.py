@@ -84,7 +84,7 @@ class Settings:
     # live, so this was failing outright with no visible error, not just unauthenticated.
     INFERENCE_MODE = os.getenv("INFERENCE_MODE", "remote").lower()
     EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", "")
-    INFERENCE_TOKEN = os.getenv("INFERENCE_TOKEN", os.getenv("HF_TOKEN", ""))
+    INFERENCE_TOKEN = os.getenv("INFERENCE_TOKEN", os.getenv("EMBED_TOKEN", ""))
 
     # ── Storage Configuration ───────────────────────────────────────────
     ENABLE_PGVECTOR = os.getenv("ENABLE_PGVECTOR", "false").lower() in ("1", "true", "yes")
