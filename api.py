@@ -152,11 +152,22 @@ class InternalTokenMiddleware:
         if request.method == "OPTIONS" or path in self.EXEMPT_EXACT or path.startswith(self.EXEMPT_PREFIX):
             return await self.app(scope, receive, send)
 
-        token = request.headers.get("X-Internal-Token")
-        expected_token = _os.environ.get("INTERNAL_TOKEN", "")
+        token = (
+            request.headers.get("X-StreamPulse-Internal-Token")
+            or request.headers.get("X-Internal-Token")
+            or request.headers.get("X-OmniIntel-Internal-Token")
+            or (request.headers.get("Authorization", "").replace("Bearer ", "") if request.headers.get("Authorization", "").startswith("Bearer ") else "")
+        )
+        expected_tokens = [
+            t for t in (
+                _os.environ.get("STREAMPULSE_INTERNAL_TOKEN"),
+                _os.environ.get("INTERNAL_TOKEN"),
+                _os.environ.get("OMNIINTEL_INTERNAL_TOKEN"),
+            ) if t
+        ]
 
         if _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
-            if not token or not hmac.compare_digest(token, expected_token):
+            if not token or not any(hmac.compare_digest(token, exp) for exp in expected_tokens):
                 response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
                 return await response(scope, receive, send)
 

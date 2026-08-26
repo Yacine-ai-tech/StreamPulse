@@ -36,6 +36,12 @@ export type LiveEvent = {
 };
 
 const BASE = import.meta.env.VITE_API_BASE_URL || "";
+const INTERNAL_TOKEN = (
+  import.meta.env.VITE_STREAMPULSE_INTERNAL_TOKEN ||
+  import.meta.env.VITE_INTERNAL_TOKEN ||
+  import.meta.env.VITE_OMNIINTEL_INTERNAL_TOKEN ||
+  ""
+).trim();
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
 // One anonymous, per-browser id — a visitor testing ingestion through this UI only sees
@@ -55,6 +61,10 @@ async function req<T>(path: string, init?: RequestInit, retryCount = 0): Promise
   try {
     const headers = new Headers(init?.headers);
     headers.set("X-Demo-Session-Id", demoSessionId());
+    if (INTERNAL_TOKEN) {
+      headers.set("X-StreamPulse-Internal-Token", INTERNAL_TOKEN);
+      headers.set("X-Internal-Token", INTERNAL_TOKEN);
+    }
     const res = await fetch(BASE + path, { ...init, headers });
     if (!res.ok) {
       if (res.status >= 500 && retryCount < 5) {
