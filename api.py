@@ -158,7 +158,7 @@ class InternalTokenMiddleware:
         if _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
             if not token or not hmac.compare_digest(token, expected_token):
                 response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
-            return await response(scope, receive, send)
+                return await response(scope, receive, send)
 
         return await self.app(scope, receive, send)
 
