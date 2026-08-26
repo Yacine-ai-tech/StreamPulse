@@ -204,8 +204,8 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
             import httpx
             import numpy as np
             h = {"Content-Type": "application/json", "User-Agent": "StreamPulse/1.0"}
-            if settings.INFERENCE_TOKEN:
-                h["Authorization"] = "Bearer " + settings.INFERENCE_TOKEN
+            if settings.EMBED_TOKEN:
+                h["Authorization"] = "Bearer " + settings.EMBED_TOKEN
 
             deadline = time.monotonic() + _EMBED_WAKE_BUDGET_SECONDS
             attempt = 0
