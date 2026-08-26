@@ -32,3 +32,30 @@ def test_real_classifier_is_wired():
     importlib.reload(api)
     from pipeline.classifier import classify
     assert classify("revenue ebitda margin")["domain"] == "Finance"
+
+
+def test_internal_token_auth(monkeypatch):
+    from api import app
+    client = TestClient(app)
+
+    # When REQUIRE_INTERNAL_TOKEN is false (default)
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "false")
+    r = client.get("/pipeline/status")
+    assert r.status_code == 200
+
+    # When REQUIRE_INTERNAL_TOKEN is true
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "true")
+    monkeypatch.setenv("INTERNAL_TOKEN", "test-secret-token")
+
+    # Missing token -> 403
+    r_missing = client.get("/pipeline/status")
+    assert r_missing.status_code == 403
+    assert r_missing.json()["detail"] == "Missing or invalid X-Internal-Token"
+
+    # Invalid token -> 403
+    r_invalid = client.get("/pipeline/status", headers={"X-Internal-Token": "wrong"})
+    assert r_invalid.status_code == 403
+
+    # Valid token -> 200
+    r_valid = client.get("/pipeline/status", headers={"X-Internal-Token": "test-secret-token"})
+    assert r_valid.status_code == 200

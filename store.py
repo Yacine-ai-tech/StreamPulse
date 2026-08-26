@@ -104,12 +104,23 @@ _initialized = False
 @contextmanager
 def _conn():
     if _PG:
-        conn = psycopg.connect(_PG_URL, row_factory=dict_row)
         try:
-            with conn:
-                yield conn
-        finally:
-            conn.close()
+            conn = psycopg.connect(_PG_URL, connect_timeout=3, row_factory=dict_row)
+            try:
+                with conn:
+                    yield conn
+            finally:
+                conn.close()
+        except Exception as e:
+            log.warning("Postgres connection failed (%s) — falling back to SQLite", e)
+            c = sqlite3.connect(_DB_PATH)
+            c.row_factory = sqlite3.Row
+            c.executescript(_SCHEMA_SQLITE)
+            try:
+                with c:
+                    yield c
+            finally:
+                c.close()
     else:
         c = sqlite3.connect(_DB_PATH)
         c.row_factory = sqlite3.Row
@@ -131,8 +142,10 @@ def _clean_row(r: Any) -> Dict[str, Any]:
     return d
 
 
-def _q(sql: str) -> str:
+def _q(sql: str, conn: Optional[Any] = None) -> str:
     """Translate sqlite-style placeholders for the active backend."""
+    if conn is not None:
+        return sql if isinstance(conn, sqlite3.Connection) else sql.replace("?", "%s")
     return sql.replace("?", "%s") if _PG else sql
 
 
@@ -142,19 +155,19 @@ def init_db() -> None:
     if _initialized:
         return
     with _conn() as c:
-        if _PG:
-            with c.cursor() as cur:
-                cur.execute(_SCHEMA_PG)
-                # Idempotent migration for tables created before owner_session_id existed.
-                cur.execute(f"ALTER TABLE {_T_KPI} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
-                cur.execute(f"ALTER TABLE {_T_LOG} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
-        else:
+        if isinstance(c, sqlite3.Connection):
             c.executescript(_SCHEMA_SQLITE)
             for table in (_T_KPI, _T_LOG):
                 try:
                     c.execute(f"ALTER TABLE {table} ADD COLUMN owner_session_id TEXT")
                 except sqlite3.OperationalError:
                     pass  # column already exists
+        else:
+            with c.cursor() as cur:
+                cur.execute(_SCHEMA_PG)
+                # Idempotent migration for tables created before owner_session_id existed.
+                cur.execute(f"ALTER TABLE {_T_KPI} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
+                cur.execute(f"ALTER TABLE {_T_LOG} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
     _initialized = True
     log.info("store ready (backend=%s)", "postgres" if _PG else "sqlite")
 
@@ -164,7 +177,7 @@ def _demo_session_scoping_enabled() -> bool:
 
 
 def store_kpi_metrics(records: List[Dict[str, Any]], owner_session_id: Optional[str] = None) -> int:
-    """Persist a batch of KPI records. Returns count inserted.
+    """Insert classified metrics into persistent store. Returns count inserted.
 
     owner_session_id=None writes rows visible to every visitor (the default for real
     external webhooks/n8n/CRM sources — that's the point of a public ingestion demo).
@@ -201,23 +214,23 @@ def store_kpi_metrics(records: List[Dict[str, Any]], owner_session_id: Optional[
                     now,
                 )
 
-                if _PG:
+                if not isinstance(c, sqlite3.Connection):
                     with c.transaction():
                         c.execute(
                             _q(f"""
                             INSERT INTO {_T_KPI}
                               (period, category, metric, value, unit, source, confidence, owner_session_id, created_at)
                             VALUES (?,?,?,?,?,?,?,?,?)
-                            """),
+                            """, c),
                             params,
                         )
                 else:
                     c.execute(
-                        _q(f"""
+                        f"""
                         INSERT INTO {_T_KPI}
                           (period, category, metric, value, unit, source, confidence, owner_session_id, created_at)
                         VALUES (?,?,?,?,?,?,?,?,?)
-                        """),
+                        """,
                         params,
                     )
                 count += 1
@@ -248,7 +261,7 @@ def get_kpi_metrics(
         sql += " WHERE " + " AND ".join(where)
     sql += " ORDER BY id DESC LIMIT ?"; params.append(limit)
     with _conn() as c:
-        rows = c.execute(_q(sql), params).fetchall()
+        rows = c.execute(_q(sql, c), params).fetchall()
     return [_clean_row(r) for r in rows]
 
 
@@ -261,10 +274,10 @@ def log_data_ingestion(source: str, status: str, records: int = 0,
     args = (source, status, records, error,
             json.dumps(payload)[:5000] if payload else None, owner_session_id, now, now)
     with _conn() as c:
-        if _PG:
+        if not isinstance(c, sqlite3.Connection):
             row = c.execute(
                 _q(f"INSERT INTO {_T_LOG} (source, status, records, error, payload, owner_session_id, created_at, updated_at) "
-                   "VALUES (?,?,?,?,?,?,?,?) RETURNING id"), args).fetchone()
+                   "VALUES (?,?,?,?,?,?,?,?) RETURNING id", c), args).fetchone()
             return int(row["id"])
         cur = c.execute(
             f"INSERT INTO {_T_LOG} (source, status, records, error, payload, owner_session_id, created_at, updated_at) "
@@ -278,7 +291,7 @@ def update_ingestion_log(log_id: int, status: str, records: int = 0,
     now = datetime.now(timezone.utc).isoformat()
     with _conn() as c:
         c.execute(
-            _q(f"UPDATE {_T_LOG} SET status=?, records=?, error=?, updated_at=? WHERE id=?"),
+            _q(f"UPDATE {_T_LOG} SET status=?, records=?, error=?, updated_at=? WHERE id=?", c),
             (status, records, error, now, log_id),
         )
 
@@ -293,7 +306,7 @@ def get_pipeline_history(limit: int = 100, session_id: Optional[str] = None) -> 
     sql += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
     with _conn() as c:
-        rows = c.execute(_q(sql), params).fetchall()
+        rows = c.execute(_q(sql, c), params).fetchall()
     return [_clean_row(r) for r in rows]
 
 
@@ -307,7 +320,7 @@ def get_ingestion_row(log_id: int, session_id: Optional[str] = None) -> Optional
         sql += " AND (owner_session_id IS NULL OR owner_session_id = ?)"
         params.append(session_id)
     with _conn() as c:
-        row = c.execute(_q(sql), params).fetchone()
+        row = c.execute(_q(sql, c), params).fetchone()
     return _clean_row(row) if row else None
 
 
@@ -322,19 +335,19 @@ def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
     init_db()
     recent_since = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
     with _conn() as c:
-        events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}")).fetchone()
-        fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL"), ("completed",)).fetchone()
-        kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}")).fetchone()
-        srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}")).fetchone()
+        events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}", c)).fetchone()
+        fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL", c), ("completed",)).fetchone()
+        kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}", c)).fetchone()
+        srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}", c)).fetchone()
         # Lifetime counts never recover once a handful of old rows failed (a fixed bug
         # stays "10/77 failed" forever) — recent_* is what alerting should actually key
         # off, since it reflects whether ingestion is failing *now*.
-        recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ?"), (recent_since,)).fetchone()
-        recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ? AND (status != ? OR error IS NOT NULL)"), (recent_since, "completed")).fetchone()
+        recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ?", c), (recent_since,)).fetchone()
+        recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ? AND (status != ? OR error IS NOT NULL)", c), (recent_since, "completed")).fetchone()
         session_stats = None
         if session_id and _demo_session_scoping_enabled():
-            s_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?"), (session_id,)).fetchone()
-            s_kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI} WHERE owner_session_id = ?"), (session_id,)).fetchone()
+            s_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
+            s_kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
     g = lambda r: (r["n"] if isinstance(r, dict) else r[0]) or 0
     out = {
         "ingestion_events": g(events),
