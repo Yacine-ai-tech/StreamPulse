@@ -76,15 +76,15 @@ class Settings:
     STREAMPULSE_EMBED_MODEL = os.getenv("STREAMPULSE_EMBED_MODEL", "BAAI/bge-m3")
 
     # ── Remote Inference (for memory-constrained environments) ─────────────
-    # Fully env-driven, no hardcoded provider — set EMBEDDING_ENDPOINT + INFERENCE_TOKEN
+    # Fully env-driven, no hardcoded provider — set EMBEDDING_ENDPOINT + EMBED_TOKEN
     # to point at any generic embed host (self-hosted orchestrator, HF Inference API,
-    # etc.), same pattern as IntelAI/RAGeval's EMBED_URL+INFERENCE_TOKEN. The previous
+    # etc.), same pattern as IntelAI/RAGeval's EMBED_URL+EMBED_TOKEN. The previous
     # default silently pointed at https://api-inference.huggingface.co, a domain that
     # no longer resolves at all (HF retired it for router.huggingface.co) — confirmed
     # live, so this was failing outright with no visible error, not just unauthenticated.
     INFERENCE_MODE = os.getenv("INFERENCE_MODE", "remote").lower()
     EMBEDDING_ENDPOINT = os.getenv("EMBEDDING_ENDPOINT", "")
-    INFERENCE_TOKEN = os.getenv("INFERENCE_TOKEN", os.getenv("HF_TOKEN", ""))
+    EMBED_TOKEN = os.getenv("EMBED_TOKEN", "")
 
     # ── Storage Configuration ───────────────────────────────────────────
     ENABLE_PGVECTOR = os.getenv("ENABLE_PGVECTOR", "false").lower() in ("1", "true", "yes")
