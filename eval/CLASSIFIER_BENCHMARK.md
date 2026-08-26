@@ -35,7 +35,9 @@ measured justification for the hybrid design.
   Tier-2-only row above (0.646) — most of the gap between it and the full-hybrid row is exactly
   those deferred, harder examples being correctly resolved by Tier 3 instead of guessed by Tier 2.
 - The embedding tier calls a remote inference host over HTTP rather than loading the model
-  in-process; it's built to poll through a cold start rather than fail on one, so its measured
-  contribution here reflects genuine classification quality, not host latency.
+  in-process; it's built to poll through on-demand backend cold-boot overhead rather than fail
+  on it, so its measured contribution here reflects genuine classification quality, not host
+  wake-up latency. First-request latency reflects that cold-boot overhead, not classifier
+  inefficiency.
 - The LLM tier was evaluated with an OpenAI-compatible chat model via LiteLLM; any of the
   supported providers (see `LLM_JUDGE`) can be swapped in without code changes.

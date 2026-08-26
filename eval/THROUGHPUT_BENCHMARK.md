@@ -12,6 +12,13 @@ single free-tier instance. Reproducible: `python eval/run_throughput_benchmark.p
 
 ## Results (real run, 2026-07-28)
 
+> **Deployment context.** This stress test fires 1,000 concurrent requests at a **constrained
+> single-instance deployment (1 worker, no autoscaling)**. The results below reflect that
+> instance ceiling — not the ingestion logic, classifier, or security layer. The HMAC signature
+> validation benchmark ([`eval/WEBHOOK_BENCHMARK.md`](WEBHOOK_BENCHMARK.md)) measures security
+> correctness at a concurrency level the instance can actually serve; those are two separate,
+> complementary measurements.
+
 | Metric | Result |
 |--------|--------|
 | Peak Throughput | 22 req/s |
