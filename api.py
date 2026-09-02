@@ -679,30 +679,65 @@ async def get_classification_trends(
         log.error("Failed to get classification trends: %s", e)
         return {"error": str(e)}
 
+def _do_analytics_refresh() -> Dict[str, Any]:
+    from storage import get_analytics_engine
+    analytics = get_analytics_engine()
+
+    # Import fresh data from PostgreSQL
+    imported = analytics.import_from_postgres()
+
+    # Refresh materialized views
+    refreshed = analytics.refresh_materialized_views()
+
+    return {
+        "success": True,
+        "records_imported": imported,
+        "views_refreshed": refreshed
+    }
+
+
 @app.post("/analytics/refresh")
 async def refresh_analytics() -> Dict[str, Any]:
     """Refresh analytics data and materialized views."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
-    
+
     try:
-        from storage import get_analytics_engine
-        analytics = get_analytics_engine()
-        
-        # Import fresh data from PostgreSQL
-        imported = analytics.import_from_postgres()
-        
-        # Refresh materialized views
-        refreshed = analytics.refresh_materialized_views()
-        
-        return {
-            "success": True,
-            "records_imported": imported,
-            "views_refreshed": refreshed
-        }
+        return _do_analytics_refresh()
     except Exception as e:
         log.error("Failed to refresh analytics: %s", e)
         return {"error": str(e), "success": False}
+
+
+_ANALYTICS_REFRESH_INTERVAL_SECONDS = int(os.getenv("ANALYTICS_REFRESH_INTERVAL_SECONDS", "900"))
+
+
+async def _periodic_analytics_refresh() -> None:
+    """The /analytics/* family (domain-summary, classification-trends, ...) reads from
+    DuckDB, which only ever gets data via /analytics/refresh -- nothing previously called
+    it automatically, so a real caller following the documented API (see ApiDocs.tsx) saw
+    permanently empty results until someone manually POSTed /analytics/refresh once. Runs
+    every ANALYTICS_REFRESH_INTERVAL_SECONDS (default 15 min) so the DuckDB analytics store
+    stays close to what's in Postgres without requiring a manual poke."""
+    if not settings.ENABLE_DUCKDB or not _storage_available:
+        return
+    while True:
+        await asyncio.sleep(_ANALYTICS_REFRESH_INTERVAL_SECONDS)
+        try:
+            result = await asyncio.to_thread(_do_analytics_refresh)
+            log.info("Periodic analytics refresh: %s", result)
+        except Exception as e:
+            log.warning("Periodic analytics refresh failed: %s", e)
+
+
+@app.on_event("startup")
+async def startup_analytics_refresh():
+    if settings.ENABLE_DUCKDB and _storage_available:
+        try:
+            await asyncio.to_thread(_do_analytics_refresh)
+        except Exception as e:
+            log.warning("Initial analytics refresh at startup failed: %s", e)
+        asyncio.create_task(_periodic_analytics_refresh())
 
 
 @app.get("/{full_path:path}", include_in_schema=False)
