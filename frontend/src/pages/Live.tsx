@@ -35,24 +35,24 @@ const LiveFeedRow = React.memo(({ row, onClick }: { row: FeedRow; onClick: () =>
     className="grid w-full grid-cols-[110px_1fr_auto] items-center gap-3 px-4 py-2.5 text-left hover:bg-surface-2"
     onClick={onClick}
   >
-    <span className="truncate text-[12px] text-muted">{row.ev.source}</span>
+    <span className="truncate text-[12px] text-muted">{row.ev?.source ?? "unknown"}</span>
     <span className="flex min-w-0 items-center gap-2">
       <span
         className="inline-block h-2 w-2 shrink-0 rounded-full"
-        style={{ background: DOMAIN_COLORS[String(row.rec.domain)] ?? "var(--text-muted)" }}
+        style={{ background: DOMAIN_COLORS[String(row.rec?.domain)] ?? "var(--text-muted)" }}
       />
       <span className="truncate text-[13px] text-body">
-        {String(row.rec.metric ?? row.rec.domain ?? "record")}
+        {String(row.rec?.metric ?? row.rec?.domain ?? "record")}
       </span>
-      <Chip title={`classified by ${row.rec.method ?? "keyword"} tier`}>
-        {String(row.rec.domain ?? "—")}{row.rec.method === "llm" ? " · llm" : ""}
+      <Chip title={`classified by ${row.rec?.method ?? "keyword"} tier`}>
+        {String(row.rec?.domain ?? "—")}{row.rec?.method === "llm" ? " · llm" : ""}
       </Chip>
-      {row.rec.image_category && <Chip tone="accent">vision: {String(row.rec.image_category)}</Chip>}
+      {row.rec?.image_category && <Chip tone="accent">vision: {String(row.rec.image_category)}</Chip>}
     </span>
     <span className="flex items-center gap-2">
-      <ConfidenceBadge value={typeof row.rec.confidence === "number" ? row.rec.confidence : null} />
+      <ConfidenceBadge value={typeof row.rec?.confidence === "number" ? row.rec.confidence : null} />
       <span className="num text-[11px] text-muted">
-        {new Date(row.ev.receivedAt).toLocaleTimeString()}
+        {row.ev?.receivedAt ? new Date(row.ev.receivedAt).toLocaleTimeString() : "—"}
       </span>
     </span>
   </motion.button>
@@ -73,8 +73,11 @@ export default function Live() {
   useEffect(() => {
     const close = openLive((ev) => {
       if (pausedRef.current) return;
+      if (!ev || !Array.isArray(ev.records)) return;
       setRows((old) => {
-        const add: FeedRow[] = ev.records.map((rec) => ({ ev, rec, key: `e${counter.current++}` }));
+        const add: FeedRow[] = ev.records
+          .filter((rec): rec is ClassifiedRecord => Boolean(rec && typeof rec === "object"))
+          .map((rec) => ({ ev, rec, key: `e${counter.current++}` }));
         return [...add, ...old].slice(0, 200);
       });
     }, setState);
@@ -83,7 +86,15 @@ export default function Live() {
 
   useEffect(() => {
     let mounted = true;
-    const fetchClients = () => api.status().then((s) => mounted && setClients(s.connected_clients)).catch(() => {});
+    const fetchClients = () =>
+      api
+        .status()
+        .then((s) => {
+          if (mounted && typeof s?.connected_clients === "number") {
+            setClients(s.connected_clients);
+          }
+        })
+        .catch(() => {});
     const t = setInterval(fetchClients, 10000);
     fetchClients();
     return () => {
@@ -94,13 +105,13 @@ export default function Live() {
 
   const perMinute = useMemo(() => {
     const cutoff = Date.now() - 60_000;
-    return rows.filter((r) => r.ev.receivedAt > cutoff).length;
+    return rows.filter((r) => (r.ev?.receivedAt ?? 0) > cutoff).length;
   }, [rows]);
 
   const domains = useMemo(() => {
     const counts: Record<string, number> = {};
     rows.forEach(({ rec }) => {
-      const d = String(rec.domain ?? "Unclassified");
+      const d = String(rec?.domain ?? "Unclassified");
       counts[d] = (counts[d] ?? 0) + 1;
     });
     return Object.entries(counts).map(([name, value]) => ({ name, value }));
@@ -156,7 +167,7 @@ export default function Live() {
               <EmptyState title="No data yet" />
             ) : (
               <div className="h-[200px]">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={100} minHeight={200}>
                   <PieChart>
                     <Pie data={domains} dataKey="value" nameKey="name" innerRadius={52} outerRadius={78} paddingAngle={3} isAnimationActive={false}>
                       {domains.map((d) => (

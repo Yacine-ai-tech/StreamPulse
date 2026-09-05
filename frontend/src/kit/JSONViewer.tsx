@@ -66,7 +66,9 @@ export function JSONViewer({ data, maxHeight = 420 }: { data: unknown; maxHeight
       <button
         className="absolute right-2 top-2 z-10 flex items-center gap-1 rounded-lg border border-line bg-surface px-2 py-1 text-[11px] text-dim hover:text-body"
         onClick={() => {
-          navigator.clipboard.writeText(text);
+          if (navigator?.clipboard?.writeText) {
+            navigator.clipboard.writeText(text).catch(() => {});
+          }
           setCopied(true);
           setTimeout(() => setCopied(false), 1200);
         }}

@@ -145,7 +145,9 @@ export function openLive(
     es.onmessage = (m) => {
       try {
         const data = JSON.parse(m.data);
-        if (data.event === "ingest") onEvent({ ...data, receivedAt: Date.now() });
+        if (data && data.event === "ingest" && Array.isArray(data.records)) {
+          onEvent({ ...data, receivedAt: Date.now() });
+        }
       } catch { }
     };
     es.onerror = () => { es?.close(); onState("down"); };
@@ -165,7 +167,9 @@ export function openLive(
     ws.onmessage = (m) => {
       try {
         const data = JSON.parse(m.data);
-        if (data.event === "ingest") onEvent({ ...data, receivedAt: Date.now() });
+        if (data && data.event === "ingest" && Array.isArray(data.records)) {
+          onEvent({ ...data, receivedAt: Date.now() });
+        }
       } catch { /* ignore non-JSON frames */ }
     };
     ws.onclose = () => {
