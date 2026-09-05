@@ -136,8 +136,29 @@ class InternalTokenMiddleware:
     of bug upstream — the fix is to not use @app.middleware("http") for
     anything that guards a streaming route."""
 
-    EXEMPT_EXACT = {"/", "/health", "/docs", "/openapi.json", "/api/redoc",
-                     "/favicon.png", "/favicon.ico", "/mark.png", "/logo.png"}
+    EXEMPT_EXACT = {
+        "/",
+        "/health",
+        "/docs",
+        "/openapi.json",
+        "/api/redoc",
+        "/favicon.png",
+        "/favicon.ico",
+        "/mark.png",
+        "/logo.png",
+        "/sw.js",
+        "/events",
+        "/playground",
+        "/sources",
+        "/destinations",
+        "/analytics",
+        "/alerts",
+        "/automation",
+        "/classifier",
+        "/api-docs",
+        "/user-guide",
+        "/benchmark",
+    }
     EXEMPT_PREFIX = ("/api/v1/auth/", "/assets/", "/static/")
 
     def __init__(self, app):
@@ -149,7 +170,12 @@ class InternalTokenMiddleware:
 
         request = Request(scope, receive=receive)
         path = request.url.path
-        if request.method == "OPTIONS" or path in self.EXEMPT_EXACT or path.startswith(self.EXEMPT_PREFIX):
+        if (
+            request.method == "OPTIONS"
+            or path in self.EXEMPT_EXACT
+            or path.startswith(self.EXEMPT_PREFIX)
+            or path.endswith((".js", ".css", ".woff2", ".woff", ".png", ".svg", ".ico", ".json", ".webmanifest"))
+        ):
             return await self.app(scope, receive, send)
 
         token = (
