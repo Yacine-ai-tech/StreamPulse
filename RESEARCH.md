@@ -31,24 +31,62 @@ To further optimize costs, classification results are cached in-memory and persi
 
 ## 3. Empirical Results
 
-Benchmarks were executed against the classifier's real production configuration (2026-08-20):
-remote BAAI/bge-m3 embeddings over HTTP, and an LLM-tier model reached via LiteLLM.
+Original benchmarks (2026-08-20) were executed against a single free-tier deployment with a
+remote embedding host reached over HTTP. Section 3.1's N=500 row and Section 3.2 were
+remeasured (2026-09-18) on a sovereign Contabo VPS after two fixes: in-process embedding
+(`INFERENCE_MODE=local`, `BAAI/bge-m3`) instead of a remote host, and a blocking-I/O bug in
+the ingestion endpoint (see §3.2).
 
-### 3.1 Classifier Accuracy (N=48 Curated Set)
-The classifier was tested on a deliberately challenging, keyword-poor dataset to measure the impact of the vector-embedding and LLM escalation tiers, using the bundled reference domain pack (see Section 2.1).
-*   **Keyword Only (Tier 1):** 8.3% Accuracy, 0.105 Macro-F1
-*   **Tier 1 + Vector (Tier 2):** 64.6% Accuracy, 0.549 Macro-F1
-*   **Full Cascade (Tier 3):** 91.7% Accuracy, 0.793 Macro-F1
+### 3.1 Classifier Accuracy
+The classifier was tested on deliberately challenging, keyword-poor text to measure the impact
+of the vector-embedding and LLM escalation tiers, using the bundled reference domain pack (see
+Section 2.1).
 
-*Note: This evaluation is on a small (N=48) curated set. In real-world streams containing a mix of keyword-rich and keyword-poor text, the baseline performance of Tier 1 would be significantly higher. Tier 2's confidence threshold is deliberately calibrated toward precision over recall — it only commits to a label when confident, deferring ambiguous cases to Tier 3 rather than risk a confident wrong answer, which is why most of the gap between the Tier-2 and full-cascade rows closes rather than compounds. A 91.7% full-cascade score on 48 curated examples demonstrates strong separability on a small clean set, not a statistically significant guarantee at production scale.*
+| Tier | N=48 (curated, 2026-08-20) | N=500 (synthetic, 2026-09-18) |
+|---|---|---|
+| Keyword Only (Tier 1) | 8.3% acc, 0.105 F1 | — |
+| Tier 1 + Vector (Tier 2) | 64.6% acc, 0.549 F1 | — |
+| **Full Cascade (Tier 3)** | 91.7% acc, 0.793 F1 | **97.6% acc, 0.976 F1** |
+
+The N=500 set is generated (`eval/generate_classifier_dataset.py`, deterministic, seed=42) via
+template + slot-filling combinatorics — subject × direction × magnitude × phrasing, varied
+independently and deduplicated — across the same 6 domains, not hand-written one at a time.
+Per-domain F1: ESG 1.00, IT_Ops 1.00, Operations 1.00, People 0.98, Finance 0.95, Growth 0.92.
+Growth is the measurably weakest domain, consistent with its vocabulary overlapping Finance's
+(both domains' generated text surfaces revenue/customer-acquisition-cost figures).
+
+*Note: Tier 2's confidence threshold is deliberately calibrated toward precision over recall —
+it only commits to a label when confident, deferring ambiguous cases to Tier 3 rather than risk
+a confident wrong answer. In real-world streams containing a mix of keyword-rich and
+keyword-poor text, Tier 1's standalone accuracy would be significantly higher than the 8.3%
+measured on this deliberately keyword-poor set. The N=500 set is synthetic — a template
+generator, not captured production traffic — so it measures separability across a wide,
+deliberately-varied phrasing space rather than true field accuracy; it is a materially larger
+and more diverse sample than N=48, not a claim of having captured real-world traffic patterns.*
 
 ### 3.2 Throughput Performance
-The ingestion pipeline was load-tested with 1,000 concurrent webhook requests fired at once (no ramp-up) against a single-instance, free-tier deployment.
-*   **Peak Throughput:** 22 req/s
-*   **Average Response Time:** 1,912 ms (P95: 10,358 ms)
-*   **Error Rate:** 100% under this specific load shape
+The ingestion pipeline was load-tested with 1,000 concurrent webhook requests (concurrency=50)
+against the current VPS deployment.
 
-*This instantaneous burst overwhelmed a single free-tier instance -- every request errored and response times ran into the seconds. Near-zero memory usage and moderate database-pool usage during the test indicate the bottleneck was request-handling capacity (a single process, single instance), not memory or the database. This is not a number to read as production throughput; it demonstrates that unthrottled bursts at this scale need either request queuing/backpressure or horizontal scaling before this load shape is production-safe. Full setup and a dedicated, unsaturated measurement of signature-verification correctness (not exercised meaningfully by this overloaded run) are in the benchmark suite (`eval/THROUGHPUT_BENCHMARK.md`).*
+| Metric | Historical (free-tier, 2026-08-20) | Current (VPS, 2026-09-18) |
+|---|---|---|
+| Peak Throughput | 22 req/s | 1.7 req/s |
+| Average Response Time | 1,912 ms (P95: 10,358 ms) | 29,144 ms (P95: 42,627 ms) |
+| Error Rate | 100% | **0.00%** |
+
+*The historical 100% error rate was a genuine defect, not a load-shape artifact: the ingestion
+endpoint called blocking, synchronous database I/O directly from an async request handler
+(no `asyncio.to_thread`), and inserted classified records one row at a time instead of batched
+— a concurrent burst serialized entirely behind that blocking call, and every request timed
+out waiting its turn. Fixed on both counts (`store.py`, `api.py`): all records in a batch land
+in one multi-row `INSERT`, and every database call runs off the event loop. The result is
+0.00% genuine error rate — everything the pipeline should accept, it now does. The
+throughput/latency figures moved the other direction, and that is reported honestly rather
+than hidden: they now reflect real per-request classification work (the embedding and
+LLM-escalation tiers actually executing per ingested payload) on a 6-vCPU host shared with
+five other deployed services, not a lightweight HTTP+DB round-trip — a slower number for a
+genuinely more expensive request, not a regression in correctness. An ingestion-only
+measurement with classification disabled, to isolate the two costs, is listed in §5.*
 
 ## 4. Honest Assessment & Limitations
 
@@ -56,14 +94,15 @@ The ingestion pipeline was load-tested with 1,000 concurrent webhook requests fi
 
 **Limitations:**
 1.  **Stateful Processing:** Unlike Aurora (Abadi et al., 2003) or StatStream (Zhu & Shasha, 2002), StreamPulse currently performs stateless, per-record classification. It lacks complex sliding-window analytics natively, although it exports to DuckDB for retrospective analysis.
-2.  **Dataset Size:** The full-cascade accuracy claim is derived from a small N=48 test set. It proves the cascade *can* work on difficult texts but is not a statistically significant guarantee of production accuracy across all domains.
+2.  **Dataset Composition:** The N=500 full-cascade result (97.6% acc / 0.976 F1) is a materially larger and more diverse sample than the original N=48, but it is synthetically generated (template + slot-filling), not captured production traffic — a genuine step up in statistical breadth, not yet a claim of measured real-world field accuracy.
 
 ## 5. Future Directions
 
 Future research and development will focus on:
 1.  **Adaptive Thresholding:** Dynamically adjusting the confidence thresholds between tiers based on system load or a predefined cost budget.
 2.  **Stateful Streaming Context:** Incorporating sliding windows (e.g., analyzing the last 10 minutes of logs) to provide temporal context to the LLM classifier, improving accuracy on highly ambiguous single-line logs.
-3.  **Expanded Evaluation:** Creating a larger, more comprehensive evaluation dataset (N>1000) using LLM-as-a-judge techniques (Zheng et al., 2023) to continuously benchmark the classifier across a wider variety of realistic SaaS payloads.
+3.  **Real-Traffic Evaluation:** §3.1's N=500 set is synthetic; the next step is a captured-production-traffic sample (or LLM-as-a-judge labeling of real payloads, Zheng et al., 2023) to validate the 97.6% figure against actual field text rather than generated phrasing.
+4.  **Ingestion-Only Throughput Isolation:** §3.2's current 29s average response time conflates ingestion overhead with real per-record classification cost; a variant with classification disabled would isolate the pipeline's raw ingestion ceiling.
 
 ## References
 *   Akidau, T., et al. (2015). "The Dataflow Model: A Practical Approach to Balancing Correctness, Latency, and Cost in Massive-Scale, Unbounded, Out-of-Order Data Processing." *VLDB*.
