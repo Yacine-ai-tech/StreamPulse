@@ -193,52 +193,63 @@ class ThroughputBenchmark:
             "memory_peak": self.results["memory_peak"]
         }
 
-def update_benchmark_markdown(results: Dict):
-    """Update the benchmark markdown with new results"""
+def update_benchmark_markdown(results: Dict, n_requests: int, concurrency: int):
+    """Update the benchmark markdown with new results. Status is a real comparison against
+    each target, not a hardcoded label — a prior version of this function marked every row
+    "Passed" unconditionally (e.g. a 29144ms avg response time against a <100ms target),
+    and its "Analysis"/"Scaling Behavior" text was hand-written fiction unconnected to
+    anything actually measured (a fabricated "68% max" DB pool figure the code never
+    computes, claims about throughput at 600-800 req/s this test never ran at)."""
     md_path = Path(__file__).resolve().parent / "THROUGHPUT_BENCHMARK.md"
-    
+    from datetime import date
+
+    def status(ok: bool) -> str:
+        return "✅ Passed" if ok else "❌ Failed"
+
+    error_ok = results["error_rate"] < 1.0
+    throughput_ok = results["throughput"] > 500
+    avg_ok = results["avg_response_time"] < 100
+    p95_ok = results["p95_response_time"] < 200
+    mem_ok = results["memory_peak"] < 500
+
     content = f"""# StreamPulse — Throughput & Scaling Benchmark
 
-A stress test of StreamPulse's webhook ingestion pipeline under high load. Reproducible:
-`python eval/run_throughput_benchmark.py`
+A stress test of StreamPulse's webhook ingestion pipeline under concurrent load. Reproducible:
+`python eval/run_throughput_benchmark.py --target <url> --n-requests {n_requests} --concurrency {concurrency}`
 
 ## Setup
-- Load pattern: 1000 concurrent webhook requests
+- Load pattern: {n_requests} webhook requests at concurrency={concurrency}
 - Payload size: ~2KB JSON (typical webhook payload)
-- Security: 80% valid HMAC signatures, 20% invalid (security testing)
-- Database: PostgreSQL with connection pooling
-- Metrics: Requests/second, error rate, database connection pool usage, memory usage
+- Security: 80% valid HMAC signatures, 20% invalid (security testing — see error_rate note below)
+- Metrics: Requests/second, error rate, response latency, memory usage
 
-## Results (real run, 2026-07-28)
+## Results (real run, {date.today().isoformat()})
 
 | Metric | Result | Target | Status |
 |--------|--------|--------|--------|
-| **Peak Throughput** | **{results['throughput']:.0f} req/s** | > 500 req/s | ✅ Passed |
-| **Avg Response Time** | **{results['avg_response_time']:.0f}ms** | < 100ms | ✅ Passed |
-| **P95 Response Time** | **{results['p95_response_time']:.0f}ms** | < 200ms | ✅ Passed |
-| **Error Rate** | **{results['error_rate']:.2f}%** | < 1% | ✅ Passed |
-| **Security Rejection Rate** | **{results['security_rate']:.0f}%** (invalid sigs) | 100% | ✅ Passed |
-| **Database Pool Usage** | **68% max** | < 90% | ✅ Passed |
-| **Memory Peak** | **{results['memory_peak']:.0f}MB** | < 500MB | ✅ Passed |
+| **Peak Throughput** | **{results['throughput']:.1f} req/s** | > 500 req/s | {status(throughput_ok)} |
+| **Avg Response Time** | **{results['avg_response_time']:.0f}ms** | < 100ms | {status(avg_ok)} |
+| **P95 Response Time** | **{results['p95_response_time']:.0f}ms** | < 200ms | {status(p95_ok)} |
+| **Error Rate** | **{results['error_rate']:.2f}%** | < 1% | {status(error_ok)} |
+| **Security Rejection Rate** | **{results['security_rate']:.1f}%** (intentional invalid sigs, ~20% by design) | — | — |
+| **Memory Peak** | **{results['memory_peak']:.1f}MB** | < 500MB | {status(mem_ok)} |
 
 **Analysis:**
-- StreamPulse handles nearly {results['throughput']:.0f} requests/second with sub-100ms response times
-- Security layer (HMAC validation) works correctly under load
-- Database connection pool remains healthy (68% peak usage)
-- Error rate is minimal ({results['error_rate']:.2f}%) even under stress
-- Memory usage stays well within acceptable limits
-
-**Scaling Behavior:**
-- Linear scaling up to ~600 req/s
-- Slight degradation beyond 600 req/s due to connection pool contention
-- Suggested improvement: Increase connection pool size for >800 req/s sustained load
-
-**Recommendation:** StreamPulse is production-ready for moderate-to-high volume webhook ingestion. Consider increasing database pool size for sustained >800 req/s loads.
+- error_rate ({results['error_rate']:.2f}%) counts only genuine unexpected failures — the ~20%
+  intentional bad-signature requests are tallied separately as security_rejection_rate, since a
+  correctly-rejected bad signature is the security check passing, not the system failing.
+- Response latency at this concurrency ({concurrency}) reflects real per-request classification
+  work (embedding + LLM-tier escalation on the ingested payload), not raw HTTP/DB overhead — a
+  concurrency-{concurrency} target well above what this deployment sustains at low latency will
+  show slow-but-successful responses like this run's {results['avg_response_time']:.0f}ms average,
+  not necessarily errors.
+- No database-connection-pool metric is collected by this script; a prior version of this
+  document reported a fabricated "68% max" figure that was never actually measured.
 """
-    
+
     with open(md_path, "w") as f:
         f.write(content)
-    
+
     print(f"\nBenchmark results written to {md_path}")
 
 async def main():
@@ -264,7 +275,7 @@ async def main():
 
     benchmark = ThroughputBenchmark(base_url=base_url)
     results = await benchmark.run_concurrent_test(n_requests=args.n_requests, concurrency=args.concurrency)
-    update_benchmark_markdown(results)
+    update_benchmark_markdown(results, args.n_requests, args.concurrency)
 
 if __name__ == "__main__":
     asyncio.run(main())
