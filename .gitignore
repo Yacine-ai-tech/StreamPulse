@@ -3,6 +3,8 @@
 __pycache__/
 *.pyc
 *.pyo
+# Benchmark resume caches (run-local, not committed)
+eval/cache/
 *.pyd
 .Python
 *.egg-info/
