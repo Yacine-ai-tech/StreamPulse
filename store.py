@@ -183,60 +183,56 @@ def store_kpi_metrics(records: List[Dict[str, Any]], owner_session_id: Optional[
     external webhooks/n8n/CRM sources — that's the point of a public ingestion demo).
     A visitor testing ingestion through the frontend UI gets their browser's
     X-Demo-Session-Id here instead, so their test data isn't shown to other visitors.
-    Anonymous demo isolation, not production auth — see DEMO_SESSION_SCOPING."""
+    Anonymous demo isolation, not production auth — see DEMO_SESSION_SCOPING.
+
+    Batched as ONE multi-row INSERT instead of a per-record execute() loop — under a
+    concurrent burst, N separate round-trip statements per request (each on a caller
+    already blocking the event loop, see ingest_json's asyncio.to_thread wrapper) was
+    the actual mechanism behind the historical 100% error rate at 1,000-request burst,
+    not just "the event loop was blocked" in the abstract."""
     init_db()
-    count = 0
     now = datetime.now(timezone.utc).isoformat()
-    with _conn() as c:
-        for r in records:
+
+    rows = []
+    for r in records:
+        try:
+            val = r.get("value")
             try:
-                val = r.get("value")
-                try:
-                    num_val = float(val) if val is not None else 0.0
-                except (ValueError, TypeError):
-                    num_val = 0.0
+                num_val = float(val) if val is not None else 0.0
+            except (ValueError, TypeError):
+                num_val = 0.0
 
-                conf = r.get("confidence")
-                try:
-                    num_conf = float(conf) if conf is not None else 1.0
-                except (ValueError, TypeError):
-                    num_conf = 1.0
+            conf = r.get("confidence")
+            try:
+                num_conf = float(conf) if conf is not None else 1.0
+            except (ValueError, TypeError):
+                num_conf = 1.0
 
-                params = (
-                    str(r.get("period") or "N/A"),
-                    str(r.get("category") or "General"),
-                    str(r.get("metric") or "metric"),
-                    num_val,
-                    str(r.get("unit")) if r.get("unit") is not None else None,
-                    str(r.get("source")) if r.get("source") is not None else None,
-                    num_conf,
-                    owner_session_id,
-                    now,
-                )
+            rows.append((
+                str(r.get("period") or "N/A"),
+                str(r.get("category") or "General"),
+                str(r.get("metric") or "metric"),
+                num_val,
+                str(r.get("unit")) if r.get("unit") is not None else None,
+                str(r.get("source")) if r.get("source") is not None else None,
+                num_conf,
+                owner_session_id,
+                now,
+            ))
+        except Exception as e:
+            log.warning("skip record %s: %s", r.get("metric"), e)
 
-                if not isinstance(c, sqlite3.Connection):
-                    with c.transaction():
-                        c.execute(
-                            _q(f"""
-                            INSERT INTO {_T_KPI}
-                              (period, category, metric, value, unit, source, confidence, owner_session_id, created_at)
-                            VALUES (?,?,?,?,?,?,?,?,?)
-                            """, c),
-                            params,
-                        )
-                else:
-                    c.execute(
-                        f"""
-                        INSERT INTO {_T_KPI}
-                          (period, category, metric, value, unit, source, confidence, owner_session_id, created_at)
-                        VALUES (?,?,?,?,?,?,?,?,?)
-                        """,
-                        params,
-                    )
-                count += 1
-            except Exception as e:
-                log.warning("skip record %s: %s", r.get("metric"), e)
-    return count
+    if not rows:
+        return 0
+
+    cols = "(period, category, metric, value, unit, source, confidence, owner_session_id, created_at)"
+    placeholders = ",".join(["(?,?,?,?,?,?,?,?,?)"] * len(rows))
+    flat_params = [v for row in rows for v in row]
+    sql = f"INSERT INTO {_T_KPI} {cols} VALUES {placeholders}"
+
+    with _conn() as c:
+        c.execute(_q(sql, c), flat_params)
+    return len(rows)
 
 
 def get_kpi_metrics(

@@ -434,7 +434,11 @@ async def ingest_json(
     webhooks/n8n/CRM sources, whose data stays visible to everyone by design — see
     store_kpi_metrics for the anonymous demo-isolation rationale."""
     # payload stored (truncated in store) so events can be inspected and replayed
-    log_id = log_data_ingestion(req.source, "started", records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id)
+    # — like store_kpi_metrics, these are synchronous DB calls, off the event loop.
+    log_id = await asyncio.to_thread(
+        log_data_ingestion, req.source, "started",
+        records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id,
+    )
 
     async def _classify_record(r):
         text_to_classify = r.get("metric", "") + " " + str(r.get("raw", ""))
@@ -443,11 +447,15 @@ async def ingest_json(
 
     try:
         enriched = await asyncio.gather(*[_classify_record(r) for r in req.records])
-        inserted = store_kpi_metrics(enriched, owner_session_id=x_demo_session_id)
+        # store_kpi_metrics does synchronous DB I/O — off the event loop, or a burst of
+        # concurrent requests serializes entirely behind it (the actual mechanism behind
+        # the historical 100% error rate at 1,000-request burst: every other coroutine
+        # stalls waiting for the loop to free up, not just this one request being slow).
+        inserted = await asyncio.to_thread(store_kpi_metrics, enriched, owner_session_id=x_demo_session_id)
     except Exception as e:
-        update_ingestion_log(log_id, "failed", error=str(e)[:2000])
+        await asyncio.to_thread(update_ingestion_log, log_id, "failed", error=str(e)[:2000])
         raise
-    update_ingestion_log(log_id, "completed", records=inserted)
+    await asyncio.to_thread(update_ingestion_log, log_id, "completed", records=inserted)
 
     # Broadcast to local WebSockets
     asyncio.create_task(_broadcast({"event": "ingest", "source": req.source, "records": enriched}))
