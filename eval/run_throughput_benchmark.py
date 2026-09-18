@@ -54,7 +54,8 @@ class ThroughputBenchmark:
             "response_times": [],
             "security_rejections": 0,
             "start_time": 0,
-            "end_time": 0
+            "end_time": 0,
+            "error_samples": [],  # first few distinct failures, for diagnosing a 0%/100% run
         }
     
     async def send_webhook(self, client: httpx.AsyncClient, valid_signature: bool = True) -> float:
@@ -73,27 +74,46 @@ class ThroughputBenchmark:
         
         start_time = time.time()
         try:
+            # content=payload_str.encode(), NOT json=SAMPLE_PAYLOAD — httpx's json= kwarg
+            # re-serializes the dict itself (different byte output than payload_str, e.g.
+            # separators), so the server-side HMAC (computed over the actual received
+            # bytes) never matched the client-computed signature. Every "valid_signature"
+            # request was failing verification and counted as a false failure.
+            # 10s was too short for real classification latency under load (measured
+            # 6-20s even outside a burst) — this let a slow-but-successful response get
+            # counted as a hard failure indistinguishable from a real server error.
             response = await client.post(
                 f"{self.base_url}/webhook/test_source",
-                json=SAMPLE_PAYLOAD,
+                content=payload_str.encode(),
                 headers=headers,
-                timeout=10.0
+                timeout=60.0
             )
             response_time = time.time() - start_time
             
             self.results["total_requests"] += 1
             if response.status_code == 200:
                 self.results["successful"] += 1
-            elif response.status_code == 403:
+            elif response.status_code == 401:
+                # The server (api.py) rejects a bad/missing signature with 401, not 403 —
+                # this branch was checking the wrong status code, so every one of the 20%
+                # intentionally-invalid-signature requests this test sends (see
+                # run_concurrent_test's `valid = random.random() < 0.8`) was counted as an
+                # unexpected generic failure instead of the expected security rejection.
+                # Not counted in `failed` either — correctly rejecting a bad signature is
+                # the security check *passing*, not the system failing under load, and
+                # mixing the two into one "error rate" made that metric meaningless.
                 self.results["security_rejections"] += 1
-                self.results["failed"] += 1
             else:
                 self.results["failed"] += 1
-            
+                if len(self.results["error_samples"]) < 5:
+                    self.results["error_samples"].append(f"HTTP {response.status_code}: {response.text[:200]}")
+
             self.results["response_times"].append(response_time)
             return response_time
-            
-        except Exception:
+
+        except Exception as e:
+            if len(self.results["error_samples"]) < 5:
+                self.results["error_samples"].append(f"{type(e).__name__}: {str(e)[:200]}")
             response_time = time.time() - start_time
             self.results["total_requests"] += 1
             self.results["failed"] += 1
@@ -141,8 +161,11 @@ class ThroughputBenchmark:
         sorted_times = sorted(response_times)
         p95_response_time = sorted_times[int(len(sorted_times) * 0.95)] if sorted_times else 0
         
+        # error_rate: genuine unexpected failures only (security_rejections are no longer
+        # folded into `failed` — see send_webhook). security_rate: what fraction of all
+        # requests were the intentional ~20% bad-signature test cases, correctly rejected.
         error_rate = (self.results["failed"] / self.results["total_requests"]) * 100 if self.results["total_requests"] > 0 else 0
-        security_rate = (self.results["security_rejections"] / (self.results["security_rejections"] + self.results["failed"])) * 100 if (self.results["security_rejections"] + self.results["failed"]) > 0 else 0
+        security_rate = (self.results["security_rejections"] / self.results["total_requests"]) * 100 if self.results["total_requests"] > 0 else 0
         
         print("\n=== Results ===")
         print(f"Total requests: {self.results['total_requests']}")
@@ -156,7 +179,11 @@ class ThroughputBenchmark:
         print(f"Error rate: {error_rate:.2f}%")
         print(f"Security rejection rate: {security_rate:.1f}%")
         print(f"Memory peak: {self.results['memory_peak']:.1f}MB")
-        
+        if self.results["error_samples"]:
+            print("Error samples:")
+            for e in self.results["error_samples"]:
+                print(f"  - {e}")
+
         return {
             "throughput": throughput,
             "avg_response_time": avg_response_time * 1000,  # convert to ms
