@@ -16,7 +16,10 @@ WEBHOOK_SECRET = os.environ.get("WEBHOOK_SECRET")
 if not WEBHOOK_SECRET:
     raise ValueError("WEBHOOK_SECRET environment variable must be set for HMAC signing")
 
-# Sample webhook payload (GitHub issue_comment style)
+# Sample webhook payload (GitHub issue_comment style). Its "action"/"title"/"body" text
+# carries no domain keyword, so it always escalates through the embedding and LLM tiers —
+# real per-record classification cost, not pure ingestion overhead. Used for the burst
+# error-rate test, where that realistic cost is the point.
 SAMPLE_PAYLOAD = {
     "action": "created",
     "issue": {
@@ -36,6 +39,17 @@ SAMPLE_PAYLOAD = {
     }
 }
 
+# Keyword-confident payload — resolves at Tier 1 (fast keyword match, no embedding/LLM
+# network calls) via connectors/webhook_receiver.py's text-field derivation. Used for the
+# sustained-throughput test, which is meant to measure the ingestion pipeline's own
+# capacity (parsing, classification dispatch, batched DB write) independent of how long a
+# given record's classification happens to take — that's a separate, already-measured cost
+# (see the burst error-rate test above).
+FAST_TIER_PAYLOAD = {
+    "text": ("Revenue, expense, profit, margin, cash, and ebitda figures were reported "
+              "in this quarter's financial statement and budget review."),
+}
+
 def generate_signature(payload: str, secret: str) -> str:
     """Generate HMAC signature for webhook payload"""
     return hmac.new(
@@ -45,8 +59,9 @@ def generate_signature(payload: str, secret: str) -> str:
     ).hexdigest()
 
 class ThroughputBenchmark:
-    def __init__(self, base_url: str = None):
+    def __init__(self, base_url: str = None, fast_tier: bool = False):
         self.base_url = base_url or os.environ.get("API_BASE_URL", "http://localhost:8000")
+        self.fast_tier = fast_tier
         self.results = {
             "total_requests": 0,
             "successful": 0,
@@ -57,10 +72,10 @@ class ThroughputBenchmark:
             "end_time": 0,
             "error_samples": [],  # first few distinct failures, for diagnosing a 0%/100% run
         }
-    
+
     async def send_webhook(self, client: httpx.AsyncClient, valid_signature: bool = True) -> float:
         """Send a single webhook request and return response time"""
-        payload_str = json.dumps(SAMPLE_PAYLOAD)
+        payload_str = json.dumps(FAST_TIER_PAYLOAD if self.fast_tier else SAMPLE_PAYLOAD)
         
         if valid_signature:
             signature = generate_signature(payload_str, WEBHOOK_SECRET)
@@ -259,6 +274,11 @@ async def main():
     ap.add_argument("--n-requests", type=int, default=1000)
     ap.add_argument("--concurrency", type=int, default=500,
                      help="Concurrent in-flight requests during the burst")
+    ap.add_argument("--fast-tier", action="store_true",
+                     help="Use a keyword-confident payload that resolves at Tier 1 (no "
+                          "embedding/LLM network calls) — measures the ingestion pipeline's "
+                          "own sustained capacity, independent of per-record classification "
+                          "cost (which the default payload deliberately exercises instead).")
     args = ap.parse_args()
     base_url = args.target
 
@@ -273,9 +293,14 @@ async def main():
         print("Make sure StreamPulse is running before benchmarking")
         return
 
-    benchmark = ThroughputBenchmark(base_url=base_url)
+    benchmark = ThroughputBenchmark(base_url=base_url, fast_tier=args.fast_tier)
     results = await benchmark.run_concurrent_test(n_requests=args.n_requests, concurrency=args.concurrency)
-    update_benchmark_markdown(results, args.n_requests, args.concurrency)
+    if args.fast_tier:
+        print("\n(--fast-tier run: results reflect ingestion capacity, not written to "
+              "THROUGHPUT_BENCHMARK.md automatically — see BENCHMARK.md's sustained-"
+              "throughput section for how this number is reported.)")
+    else:
+        update_benchmark_markdown(results, args.n_requests, args.concurrency)
 
 if __name__ == "__main__":
     asyncio.run(main())
