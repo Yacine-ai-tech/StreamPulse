@@ -1,3 +1,4 @@
+import argparse
 import asyncio
 import time
 import hmac
@@ -214,8 +215,16 @@ A stress test of StreamPulse's webhook ingestion pipeline under high load. Repro
     print(f"\nBenchmark results written to {md_path}")
 
 async def main():
+    ap = argparse.ArgumentParser()
+    ap.add_argument("--target", default=os.environ.get("API_BASE_URL", "http://localhost:8000"),
+                     help="Base URL of the StreamPulse instance to load-test")
+    ap.add_argument("--n-requests", type=int, default=1000)
+    ap.add_argument("--concurrency", type=int, default=500,
+                     help="Concurrent in-flight requests during the burst")
+    args = ap.parse_args()
+    base_url = args.target
+
     # Check if server is running
-    base_url = os.environ.get("API_BASE_URL", "http://localhost:8000")
     try:
         async with httpx.AsyncClient() as client:
             response = await client.get(f"{base_url}/health", timeout=5.0)
@@ -225,9 +234,9 @@ async def main():
         print(f"Warning: Could not connect to server at {base_url}: {e}")
         print("Make sure StreamPulse is running before benchmarking")
         return
-    
+
     benchmark = ThroughputBenchmark(base_url=base_url)
-    results = await benchmark.run_concurrent_test(n_requests=1000, concurrency=50)
+    results = await benchmark.run_concurrent_test(n_requests=args.n_requests, concurrency=args.concurrency)
     update_benchmark_markdown(results)
 
 if __name__ == "__main__":
