@@ -11,7 +11,7 @@ COPY . .
 EXPOSE 8004
 
 HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD curl -f http://localhost:${PORT:-8004}/health || exit 1
+    CMD python3 -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",8004)}/health', timeout=5)" || exit 1
 
 # Honor the platform-injected $PORT (PaaS platforms); default 8004 locally.
 # exec via sh so $PORT expands AND uvicorn becomes PID 1 (clean SIGTERM shutdown).
