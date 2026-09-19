@@ -96,21 +96,43 @@ CREATE TABLE IF NOT EXISTS sp_ingestion_log (
 """
 
 from contextlib import contextmanager
+import threading
 
 _DB_PATH = Path("streampulse.db")
 _initialized = False
+
+# A fresh psycopg.connect() per call (the old behavior) means every request pays a real
+# TCP+TLS handshake to Neon's remote Postgres for each of the up to 3 DB touches
+# ingest_json makes — measured live as the dominant cost behind a ~6s average response
+# time even for a request whose classification resolves free, in-process, at the
+# keyword tier. A process-lifetime pool amortizes that handshake across requests instead.
+_pool = None
+_pool_lock = threading.Lock()
+
+
+def _get_pool():
+    global _pool
+    if _pool is None:
+        with _pool_lock:
+            if _pool is None:  # re-check inside the lock — another thread may have won the race
+                from psycopg_pool import ConnectionPool
+                _pool = ConnectionPool(
+                    _PG_URL,
+                    min_size=2,
+                    max_size=20,
+                    kwargs={"row_factory": dict_row, "connect_timeout": 3},
+                )
+    return _pool
 
 
 @contextmanager
 def _conn():
     if _PG:
         try:
-            conn = psycopg.connect(_PG_URL, connect_timeout=3, row_factory=dict_row)
-            try:
-                with conn:
-                    yield conn
-            finally:
-                conn.close()
+            pool = _get_pool()
+            with pool.connection() as conn:
+                yield conn
+            return
         except Exception as e:
             log.warning("Postgres connection failed (%s) — falling back to SQLite", e)
             c = sqlite3.connect(_DB_PATH)
