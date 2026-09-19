@@ -85,8 +85,22 @@ throughput/latency figures moved the other direction, and that is reported hones
 than hidden: they now reflect real per-request classification work (the embedding and
 LLM-escalation tiers actually executing per ingested payload) on a 6-vCPU host shared with
 five other deployed services, not a lightweight HTTP+DB round-trip — a slower number for a
-genuinely more expensive request, not a regression in correctness. An ingestion-only
-measurement with classification disabled, to isolate the two costs, is listed in §5.*
+genuinely more expensive request, not a regression in correctness.
+
+An ingestion-isolated follow-up (`--fast-tier`, resolves at Tier 1, no embedding/LLM call
+per request) was then used to pursue a documented sustained-throughput target of ≥480 req/s.
+Two further root causes were found and fixed in sequence, each verified independently:
+Python's default `asyncio.to_thread()` executor is sized by CPU count
+(`min(32, os.cpu_count()+4)`, 10 threads on this 6-vCPU host) rather than by request
+concurrency, and every database call was opening a fresh connection (a real TCP+TLS
+handshake to the remote Postgres host) instead of reusing a pool. Resizing the executor
+took throughput from 1.7 to 8.0 req/s; pooling connections (`psycopg_pool.ConnectionPool`)
+took it to 9.2 req/s, with average response time falling from 28.7s to 5.1s and the error
+rate holding at 0.00% throughout. The 480 req/s target was not reached: at the test's
+concurrency=50 and 5.1s average latency, `50 / 5.1 ≈ 9.8 req/s` is the arithmetic ceiling of
+this configuration, matching the measured 9.2 req/s. Closing the remaining gap requires
+horizontal scaling (multiple worker processes or instances) rather than a further
+single-process code fix; see §5.*
 
 ## 4. Honest Assessment & Limitations
 
@@ -95,6 +109,7 @@ measurement with classification disabled, to isolate the two costs, is listed in
 **Limitations:**
 1.  **Stateful Processing:** Unlike Aurora (Abadi et al., 2003) or StatStream (Zhu & Shasha, 2002), StreamPulse currently performs stateless, per-record classification. It lacks complex sliding-window analytics natively, although it exports to DuckDB for retrospective analysis.
 2.  **Dataset Composition:** The N=500 full-cascade result (97.6% acc / 0.976 F1) is a materially larger and more diverse sample than the original N=48, but it is synthetically generated (template + slot-filling), not captured production traffic — a genuine step up in statistical breadth, not yet a claim of measured real-world field accuracy.
+3.  **Single-Process Throughput Ceiling:** The ingestion-isolated sustained-throughput measurement in §3.2 (9.2 req/s) is bound by a single-worker, single-process FastAPI deployment on shared 6-vCPU hardware — it is an honest measurement of that specific deployment shape, not a ceiling on the architecture itself. A documented target of ≥480 req/s was not reached and, per the arithmetic in §3.2, cannot be reached without horizontal scaling.
 
 ## 5. Future Directions
 
@@ -102,7 +117,7 @@ Future research and development will focus on:
 1.  **Adaptive Thresholding:** Dynamically adjusting the confidence thresholds between tiers based on system load or a predefined cost budget.
 2.  **Stateful Streaming Context:** Incorporating sliding windows (e.g., analyzing the last 10 minutes of logs) to provide temporal context to the LLM classifier, improving accuracy on highly ambiguous single-line logs.
 3.  **Real-Traffic Evaluation:** §3.1's N=500 set is synthetic; the next step is a captured-production-traffic sample (or LLM-as-a-judge labeling of real payloads, Zheng et al., 2023) to validate the 97.6% figure against actual field text rather than generated phrasing.
-4.  **Ingestion-Only Throughput Isolation:** §3.2's current 29s average response time conflates ingestion overhead with real per-record classification cost; a variant with classification disabled would isolate the pipeline's raw ingestion ceiling.
+4.  **Horizontal Scaling for Sustained Throughput:** §3.2 isolated and fixed two real single-process bottlenecks (executor sizing, connection pooling), raising ingestion-only throughput from 1.7 to 9.2 req/s, but closing the remaining gap to a ≥480 req/s target requires running multiple worker processes or instances behind a load balancer rather than further single-process tuning.
 
 ## References
 *   Akidau, T., et al. (2015). "The Dataflow Model: A Practical Approach to Balancing Correctness, Latency, and Cost in Massive-Scale, Unbounded, Out-of-Order Data Processing." *VLDB*.
