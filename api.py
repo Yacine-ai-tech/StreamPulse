@@ -234,6 +234,19 @@ async def startup_event():
     import threading
     from connectors.n8n import n8n
 
+    # asyncio.to_thread() (used by ingest_json for classify/store_kpi_metrics/
+    # log_data_ingestion/update_ingestion_log — up to 4 calls per request) runs on
+    # Python's DEFAULT executor, which defaults to min(32, os.cpu_count()+4) — only 10
+    # threads on a 6-vCPU host. Measured live: a burst at concurrency=50 averaged ~29s
+    # response time even for a payload that resolves at the free, no-network keyword
+    # tier, which ruled out classification cost as the cause — the requests were queued
+    # on this undersized thread pool, not doing real work. Sized for real concurrency
+    # instead of Python's CPU-count-based default, which has nothing to do with how many
+    # concurrent blocking-I/O calls this endpoint actually issues.
+    import asyncio
+    from concurrent.futures import ThreadPoolExecutor
+    asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=64))
+
 
 # Try to import upgraded classifier; gracefully degrade
 try:
