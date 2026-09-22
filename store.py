@@ -190,10 +190,21 @@ def init_db() -> None:
                     pass  # column already exists
         else:
             with c.cursor() as cur:
-                cur.execute(_SCHEMA_PG)
-                # Idempotent migration for tables created before owner_session_id existed.
-                cur.execute(f"ALTER TABLE {_T_KPI} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
-                cur.execute(f"ALTER TABLE {_T_LOG} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
+                # Multi-worker deployments (WEB_CONCURRENCY>1) start every worker process
+                # concurrently, and each calls init_db() on its own first request — without
+                # serializing, N processes running the same CREATE/ALTER TABLE DDL at once
+                # deadlock on Postgres's AccessExclusiveLock for the relation (measured:
+                # psycopg.errors.DeadlockDetected under real concurrent worker startup).
+                # An advisory lock (arbitrary fixed key) makes the other workers simply wait
+                # their turn instead of colliding; the DDL itself is already idempotent.
+                cur.execute("SELECT pg_advisory_lock(727384910)")
+                try:
+                    cur.execute(_SCHEMA_PG)
+                    # Idempotent migration for tables created before owner_session_id existed.
+                    cur.execute(f"ALTER TABLE {_T_KPI} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
+                    cur.execute(f"ALTER TABLE {_T_LOG} ADD COLUMN IF NOT EXISTS owner_session_id TEXT")
+                finally:
+                    cur.execute("SELECT pg_advisory_unlock(727384910)")
     _initialized = True
     log.info("store ready (backend=%s)", "postgres" if _PG else "sqlite")
 
