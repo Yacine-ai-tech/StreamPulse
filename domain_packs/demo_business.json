@@ -5,7 +5,19 @@
     "we brought in more money and kept more of it after costs",
     "balance sheet, income statement, and financial reporting",
     "budget planning and cost control",
-    "money coming in and going out of the business"
+    "money coming in and going out of the business",
+    "quarterly revenue against the board's forecast",
+    "gross margin trends after a pricing change",
+    "EBITDA performance compared to last quarter",
+    "operating cash flow heading into year-end",
+    "the accounts receivable aging balance",
+    "our monthly burn rate and runway",
+    "net income after the billing system reconciled",
+    "cost of goods sold and unit economics",
+    "free cash flow generation this quarter",
+    "deferred revenue recognition schedule",
+    "the accounts payable backlog and vendor terms",
+    "capital expenditure versus the annual budget"
   ],
   "Operations": [
     "operations supply chain inventory logistics throughput",
@@ -13,7 +25,18 @@
     "goods moving through the warehouse and delivery network",
     "process quality, defects, and cycle time",
     "procurement and vendor management",
-    "how smoothly the day to day work gets done"
+    "how smoothly the day to day work gets done",
+    "warehouse throughput during the peak shipping window",
+    "on-time delivery rate across three warehouses",
+    "inventory turns after the new supplier came online",
+    "supplier lead time and procurement delays",
+    "defect rate on the packing line",
+    "manufacturing yield after a machine went down for maintenance",
+    "fulfillment cost per order as volume spiked",
+    "conveyor uptime after the layout change",
+    "cycle time once the new scanner rollout finished",
+    "logistics network capacity and route optimization",
+    "quality control incidents on the production floor"
   ],
   "Growth": [
     "growth marketing customer acquisition retention churn",
@@ -21,7 +44,17 @@
     "how many people are trying the product and sticking with it",
     "marketing campaigns, conversion rates, and word of mouth",
     "recurring revenue and account expansion",
-    "winning new business and keeping existing customers longer"
+    "winning new business and keeping existing customers longer",
+    "new signups after the new pricing tier launched",
+    "trial-to-paid conversion following the product-led growth push",
+    "monthly active user trends across self-serve signups",
+    "churn in the enterprise segment",
+    "net revenue retention and expansion MRR",
+    "the sales pipeline and deal velocity",
+    "customer acquisition cost after the campaign launched",
+    "referral rate and word-of-mouth growth",
+    "activation rate once the onboarding flow was redesigned",
+    "upsell and cross-sell performance this quarter"
   ],
   "People": [
     "hr people employee turnover hiring retention",
@@ -29,7 +62,17 @@
     "hiring new team members and people leaving the company",
     "compensation, benefits, and employee satisfaction",
     "how happy and how long people stay working here",
-    "recruiting talent and building the team"
+    "recruiting talent and building the team",
+    "employee turnover after the new benefits rollout",
+    "headcount growth following the reorg",
+    "time-to-hire across engineering roles",
+    "engagement scores from the last survey",
+    "retention rate once the hybrid policy took effect",
+    "internal promotions and career pathing",
+    "sick leave usage company-wide",
+    "the hiring pipeline heading into the next review cycle",
+    "manager span of control in the support org",
+    "onboarding completion rate for new hires"
   ],
   "ESG": [
     "esg sustainability carbon diversity governance",
@@ -37,7 +80,16 @@
     "corporate responsibility and board oversight",
     "workplace safety and community impact",
     "how the company treats the planet and its people fairly",
-    "diversity, ethics, and long-term stewardship"
+    "diversity, ethics, and long-term stewardship",
+    "scope 2 carbon emissions after the solar rollout",
+    "board diversity per the annual ESG report",
+    "sustainability score trends across all facilities",
+    "renewable energy usage this fiscal year",
+    "waste diverted from landfill for the third audit cycle",
+    "supplier code-of-conduct audit results",
+    "water usage per facility against the 2027 target",
+    "governance rating following the new vetting process",
+    "workplace safety incidents after the training program launched"
   ],
   "IT_Ops": [
     "it uptime latency incident deployment devops",
@@ -45,7 +97,17 @@
     "software releases, outages, and technical incidents",
     "cybersecurity and data protection",
     "keeping the servers and systems running smoothly",
-    "engineering velocity and platform stability"
+    "engineering velocity and platform stability",
+    "service uptime during last night's deploy",
+    "P95 API latency on the primary cluster",
+    "incident count following the database migration",
+    "deployment frequency after the autoscaling change",
+    "mean time to recovery during a production outage",
+    "error budget burn across two regions",
+    "on-call page volume after the config change",
+    "database replication lag on the primary cluster",
+    "CDN cache hit rate after the provider incident",
+    "security patching and vulnerability remediation status"
   ],
   "General": [
     "general company update news announcement",
@@ -56,6 +118,9 @@
     "broad organizational news",
     "the weather, sports, or something unrelated to work",
     "a personal message with nothing to do with the business",
-    "small talk or a topic that has nothing to do with any department"
+    "small talk or a topic that has nothing to do with any department",
+    "an all-hands meeting recap",
+    "a new office opening or facilities update",
+    "a customer testimonial shared internally"
   ]
 }
