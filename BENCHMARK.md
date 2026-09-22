@@ -100,23 +100,34 @@ independently before the next was attempted:
 |---|---|---|---|---|
 | Baseline | — | 1.7 req/s | 28,719 ms | 0.00% |
 | +1 | Default `asyncio.to_thread()` executor resized from `min(32, cpu_count+4)` (10 threads on this host) to a pool sized for real request concurrency | 8.0 req/s | ~6,000 ms | 0.00% |
-| +2 (final) | Postgres connections pooled (`psycopg_pool.ConnectionPool`) instead of a fresh TCP+TLS handshake per DB call | **9.2 req/s** | **5,105 ms** | **0.00%** |
+| +2 | Postgres connections pooled (`psycopg_pool.ConnectionPool`) instead of a fresh TCP+TLS handshake per DB call | 9.2 req/s | 5,105 ms | 0.00% |
+| +3 | DB pool ceiling raised (`max_size` 20 → 100; was queueing requests behind a pool-slot wait, not query cost, at concurrency ≥20) and worker count raised from 1 to 6 (`WEB_CONCURRENCY`) to use all 6 vCPUs instead of one Python process | **46.8 req/s** | **4,041 ms** | **0.00%*** |
 
-**Target assessment: ≥480 req/s sustained throughput — not achieved.** The measured
-ceiling of 9.2 req/s is consistent with the test's own concurrency bound, not an
-unexplained shortfall: at concurrency=50 and ~5.1s average latency per request,
-`50 / 5.1 ≈ 9.8 req/s` is the arithmetic ceiling of this configuration, and the
-measured 9.2 req/s sits within that bound. Reaching 480 req/s would require either a
-sub-100ms average request latency at the same concurrency, or concurrency scaled by
-roughly 50x — neither is available from a single-process, single-worker FastAPI
-deployment on a 6-vCPU host shared with five other running services. The original
-480 req/s figure was set against a lighter measurement shape than this benchmark
-represents and does not reflect a regression introduced during this round of fixes;
-each of the three fixes above produced a genuine, reproducible improvement (1.7 → 8.0 →
-9.2 req/s) and eliminated the error rate, but closing the remaining ~50x gap is an
-architectural change (multi-worker/multi-process deployment, horizontal scaling, or a
-dedicated host), not a code-level fix, and is listed under Future Directions in
-[`RESEARCH.md`](RESEARCH.md).
+*\*Raising worker count from 1 to 6 surfaced a new, genuine bug before it surfaced this
+result: every worker process independently ran the same startup `ALTER TABLE ... ADD
+COLUMN IF NOT EXISTS` migration, and N processes issuing the same DDL concurrently
+deadlocked on Postgres's `AccessExclusiveLock` for the relation
+(`psycopg.errors.DeadlockDetected`, reproduced at ~9.7% request failure with 6 workers).
+Fixed with a Postgres advisory lock (`pg_advisory_lock`) serializing the migration across
+workers — the DDL itself was already idempotent, only concurrent execution was unsafe.
+The 46.8 req/s figure above is measured after that fix, at 0.00% error.*
+
+**Concurrency is not free to increase further — measured, not assumed.** Pushing client
+concurrency to 500 (from 200) did not raise throughput; it dropped to 31.7 req/s with
+avg latency rising to 14.9s and a 0.84% error rate (client-side `ReadError`s under
+oversaturation). 200 concurrent requests against 6 workers is close to this
+deployment's real ceiling — more concurrency past that point adds queueing delay, not
+completed work.
+
+**Target assessment: ≥480 req/s sustained throughput — not achieved, but the gap
+narrowed substantially.** 1.7 → 46.8 req/s is a ~27x improvement across five real,
+independently-verified fixes, with 0.00% error rate holding throughout. At
+concurrency=200 and ~4.0s average latency, `200 / 4.0 ≈ 50 req/s` is the arithmetic
+ceiling of this configuration — consistent with the measured 46.8 req/s. Reaching 480
+req/s from here needs roughly another 10x, which this single VPS cannot supply by
+further tuning: the remaining path is horizontal scaling (multiple VPS instances behind
+a load balancer), not more per-instance configuration. That architectural step is listed
+under Future Directions in [`RESEARCH.md`](RESEARCH.md).
 
 ---
 
