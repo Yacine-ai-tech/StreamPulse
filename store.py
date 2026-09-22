@@ -116,10 +116,14 @@ def _get_pool():
         with _pool_lock:
             if _pool is None:  # re-check inside the lock — another thread may have won the race
                 from psycopg_pool import ConnectionPool
+                # max_size was 20 while burst tests ran at concurrency 50+ — every
+                # request beyond 20 in flight queued for a pool slot even though its
+                # own query was fast, which is real, measured queueing latency (not
+                # query cost) masquerading as slow throughput.
                 _pool = ConnectionPool(
                     _PG_URL,
-                    min_size=2,
-                    max_size=20,
+                    min_size=4,
+                    max_size=int(os.environ.get("PG_POOL_MAX_SIZE", "100")),
                     kwargs={"row_factory": dict_row, "connect_timeout": 3},
                 )
     return _pool
