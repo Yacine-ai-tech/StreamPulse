@@ -90,61 +90,44 @@ Reproducible: `python eval/run_throughput_benchmark.py --target <url> --n-reques
 | Security Rejection Rate | not measured | 21.4% (intentional bad-signature test cases, ~20% by design) |
 | Memory Peak | 8 MB | 6.9 MB |
 
-**How to read this:** the historical run's 100% error rate was a genuine bug — the
-ingestion endpoint called blocking, synchronous database I/O directly from an async
-request handler with no `asyncio.to_thread`, and inserted records one row at a time
-instead of batched, so a concurrent burst serialized entirely behind that blocking call.
-Both are fixed (`store.py`/`api.py`): a batched multi-row insert, and the DB calls moved
-off the event loop. The result is **0.00% genuine error rate** — every request the
-pipeline should accept, it now does.
-
-The throughput/latency numbers moved in the other direction and that is also honestly
-reported, not hidden: response time now reflects **real per-request classification work**
-(the embedding + LLM-escalation tiers actually running on each ingested payload, not a
-lightweight HTTP+DB round-trip) on a 6-vCPU box shared with 5 other deployed services —
-this is a genuinely slower number for a genuinely more expensive request, not a
-regression in reliability.
+The historical 100% error rate reflected synchronous database I/O on the async request
+path and unbatched single-row inserts. The ingestion path now runs entirely off the
+event loop with batched multi-row writes (`store.py`/`api.py`), yielding a 0.00% error
+rate under the same burst load. The slower average response time is attributable to
+measuring real per-request classification cost (embedding and LLM-escalation tiers
+executing on each payload) rather than a bare HTTP+DB round trip.
 
 ### 2.1 Sustained Throughput (Ingestion-Isolated)
 
 A follow-up run isolates ingestion capacity from classification cost, using a payload
-engineered to resolve at Tier 1 (keyword match) so no embedding or LLM network call
+engineered to resolve at Tier 1 (keyword match), so no embedding or LLM network call
 occurs per request (`--fast-tier`, [`eval/run_throughput_benchmark.py`](eval/run_throughput_benchmark.py)).
-Three fixes were applied between the baseline and final measurement below, each verified
-independently before the next was attempted:
 
-| Stage | Fix | Peak Throughput | Avg Response Time | Error Rate |
-|---|---|---|---|---|
-| Baseline | — | 1.7 req/s | 28,719 ms | 0.00% |
-| +1 | Default `asyncio.to_thread()` executor resized from `min(32, cpu_count+4)` (10 threads on this host) to a pool sized for real request concurrency | 8.0 req/s | ~6,000 ms | 0.00% |
-| +2 | Postgres connections pooled (`psycopg_pool.ConnectionPool`) instead of a fresh TCP+TLS handshake per DB call | 9.2 req/s | 5,105 ms | 0.00% |
-| +3 | DB pool ceiling raised (`max_size` 20 → 100; was queueing requests behind a pool-slot wait, not query cost, at concurrency ≥20) and worker count raised from 1 to 6 (`WEB_CONCURRENCY`) to use all 6 vCPUs instead of one Python process | **46.8 req/s** | **4,041 ms** | **0.00%*** |
+| Configuration | Peak Throughput | Avg Response Time | Error Rate |
+|---|---|---|---|
+| Single-process, unpooled DB connections | 1.7 req/s | 28,719 ms | 0.00% |
+| Thread pool sized for request concurrency | 8.0 req/s | ~6,000 ms | 0.00% |
+| Pooled Postgres connections | 9.2 req/s | 5,105 ms | 0.00% |
+| Multi-worker deployment (6 workers, pooled connections at scale) | **46.8 req/s** | **4,041 ms** | **0.00%** |
 
-*\*Raising worker count from 1 to 6 surfaced a new, genuine bug before it surfaced this
-result: every worker process independently ran the same startup `ALTER TABLE ... ADD
-COLUMN IF NOT EXISTS` migration, and N processes issuing the same DDL concurrently
-deadlocked on Postgres's `AccessExclusiveLock` for the relation
-(`psycopg.errors.DeadlockDetected`, reproduced at ~9.7% request failure with 6 workers).
-Fixed with a Postgres advisory lock (`pg_advisory_lock`) serializing the migration across
-workers — the DDL itself was already idempotent, only concurrent execution was unsafe.
-The 46.8 req/s figure above is measured after that fix, at 0.00% error.*
+The multi-worker configuration (`WEB_CONCURRENCY=6`) uses one Uvicorn worker process per
+vCPU with a shared connection-pool ceiling sized to the deployment's expected concurrency
+(`max_size=100`). Schema initialization is serialized across worker startup via a
+Postgres advisory lock, since concurrent identical DDL statements from independent
+processes otherwise contend for the same table-level lock.
 
-**Concurrency is not free to increase further — measured, not assumed.** Pushing client
-concurrency to 500 (from 200) did not raise throughput; it dropped to 31.7 req/s with
-avg latency rising to 14.9s and a 0.84% error rate (client-side `ReadError`s under
-oversaturation). 200 concurrent requests against 6 workers is close to this
-deployment's real ceiling — more concurrency past that point adds queueing delay, not
-completed work.
+Concurrency was profiled beyond the operating point above: at concurrency=500 (versus
+200), throughput fell to 31.7 req/s with average latency rising to 14.9s and a 0.84%
+client-side error rate, indicating the deployment is past its effective operating range
+at that load. Concurrency=200 against 6 workers is within this deployment's effective
+range, consistent with the arithmetic bound `200 / 4.0s ≈ 50 req/s`.
 
-**Target assessment: ≥480 req/s sustained throughput — not achieved, but the gap
-narrowed substantially.** 1.7 → 46.8 req/s is a ~27x improvement across five real,
-independently-verified fixes, with 0.00% error rate holding throughout. At
-concurrency=200 and ~4.0s average latency, `200 / 4.0 ≈ 50 req/s` is the arithmetic
-ceiling of this configuration — consistent with the measured 46.8 req/s. Reaching 480
-req/s from here needs roughly another 10x, which this single VPS cannot supply by
-further tuning: the remaining path is horizontal scaling (multiple VPS instances behind
-a load balancer), not more per-instance configuration. That architectural step is listed
-under Future Directions in [`RESEARCH.md`](RESEARCH.md).
+**Design target: ≥480 req/s sustained throughput.** Current single-instance capacity is
+46.8 req/s, a 27x improvement over the initial measurement. Reaching the design target
+from a single VPS's compute envelope requires horizontal scaling — multiple instances
+behind a load balancer — rather than further single-instance tuning; this is the planned
+next infrastructure iteration and is listed under Future Directions in
+[`RESEARCH.md`](RESEARCH.md).
 
 ---
 
