@@ -841,15 +841,20 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         _cache_classification(content, result)
         return result
 
-    # Tier 3: Zero-shot classification via LLM (Claude Haiku or Gemini)
-    try:
-        from litellm import completion
-        labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
-        # Fall back to Gemini Flash when no Anthropic/OpenAI key is configured
-        model = settings.LLM_JUDGE
-        if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
-            model = "gemini/gemini-2.5-flash"
+    # Tier 3: Zero-shot classification via LLM (Claude Haiku primary, Gemini failover).
+    # Two distinct reasons to route to Gemini: no Anthropic/OpenAI key configured at all
+    # (static), or the primary provider's own call fails with a rate-limit/quota error
+    # (dynamic) — a live quota spike shouldn't drop straight to keyword-only when a
+    # second provider is configured and available.
+    labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
+    primary_model = settings.LLM_JUDGE
+    if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
+        primary_model = "gemini/gemini-2.5-flash"
+    gemini_failover = "gemini/gemini-2.5-flash"
+    has_gemini_failover = os.getenv("GEMINI_API_KEY") and primary_model != gemini_failover
 
+    def _call(model: str):
+        from litellm import completion
         resp = completion(
             model=model,
             messages=[
@@ -858,13 +863,25 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
             ],
             temperature=0.0,
         )
-        label = (resp.choices[0].message.content or "").strip()
-        if label in labels:
-            result = {"domain": label, "confidence": settings.CLASSIFIER_LLM_CONFIDENCE, "method": "llm"}
-            _cache_classification(content, result)
-            return result
-    except Exception as e:
-        log.warning("LLM classify escalation failed: %s", e)
+        return (resp.choices[0].message.content or "").strip()
+
+    for model, is_failover in ((primary_model, False), (gemini_failover, True)):
+        if is_failover and not has_gemini_failover:
+            break
+        try:
+            label = _call(model)
+            if label in labels:
+                method = "llm_failover" if is_failover else "llm"
+                result = {"domain": label, "confidence": settings.CLASSIFIER_LLM_CONFIDENCE, "method": method}
+                _cache_classification(content, result)
+                return result
+            break  # got a response, just not a valid label — a failover call wouldn't fix that
+        except Exception as e:
+            from litellm.exceptions import RateLimitError
+            if is_failover or not isinstance(e, RateLimitError):
+                log.warning("LLM classify escalation failed (%s): %s", model, e)
+                break
+            log.info("Tier 3 quota spike on %s — failing over to %s", model, gemini_failover)
 
     result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_fallback"}
     # Do not cache this result to prevent cache poisoning during LLM outages
