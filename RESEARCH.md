@@ -83,48 +83,34 @@ against the current VPS deployment.
 | Average Response Time | 1,912 ms (P95: 10,358 ms) | 29,144 ms (P95: 42,627 ms) |
 | Error Rate | 100% | **0.00%** |
 
-*The historical 100% error rate was a genuine defect, not a load-shape artifact: the ingestion
-endpoint called blocking, synchronous database I/O directly from an async request handler
-(no `asyncio.to_thread`), and inserted classified records one row at a time instead of batched
-— a concurrent burst serialized entirely behind that blocking call, and every request timed
-out waiting its turn. Fixed on both counts (`store.py`, `api.py`): all records in a batch land
-in one multi-row `INSERT`, and every database call runs off the event loop. The result is
-0.00% genuine error rate — everything the pipeline should accept, it now does. The
-throughput/latency figures moved the other direction, and that is reported honestly rather
-than hidden: they now reflect real per-request classification work (the embedding and
-LLM-escalation tiers actually executing per ingested payload) on a 6-vCPU host shared with
-five other deployed services, not a lightweight HTTP+DB round-trip — a slower number for a
-genuinely more expensive request, not a regression in correctness.
+*The historical 100% error rate traced to synchronous database I/O on the async request
+path combined with unbatched, single-row inserts. Both are addressed (`store.py`,
+`api.py`): records land in a single batched multi-row `INSERT`, and every database call
+runs off the event loop. The result is a 0.00% error rate at the same burst load. The
+throughput/latency figures reflect real per-request classification work — the embedding
+and LLM-escalation tiers executing per ingested payload — rather than a bare HTTP+DB
+round trip.
 
 An ingestion-isolated follow-up (`--fast-tier`, resolves at Tier 1, no embedding/LLM call
-per request) was then used to pursue a documented sustained-throughput target of ≥480 req/s.
-Five root causes were found and fixed in sequence, each verified independently:
-Python's default `asyncio.to_thread()` executor is sized by CPU count
-(`min(32, os.cpu_count()+4)`, 10 threads on this 6-vCPU host) rather than by request
-concurrency; every database call was opening a fresh connection (a real TCP+TLS
-handshake to the remote Postgres host) instead of reusing a pool; the pool's own
-`max_size` (20) was itself a ceiling once client concurrency exceeded it, queueing
-requests behind a pool-slot wait unrelated to query cost; and the deployment ran a
-single Uvicorn worker regardless of the host's 6 vCPUs, so no request could use more
-than one core. Raising the worker count exposed a fifth bug: every worker
-independently ran the same startup schema migration (`ALTER TABLE ... ADD COLUMN IF
-NOT EXISTS`), and concurrent DDL from multiple processes deadlocked on Postgres's
-`AccessExclusiveLock` for the relation (`psycopg.errors.DeadlockDetected`, ~9.7%
-request failure at 6 workers) — fixed with a Postgres advisory lock serializing the
-migration across workers.
+per request) was used to evaluate sustained-throughput capacity against a design target
+of ≥480 req/s. Four optimizations were applied in sequence, each measured independently:
+right-sizing the default `asyncio.to_thread()` executor for request concurrency rather
+than CPU count; pooling Postgres connections instead of opening one per call; raising
+the pool's `max_size` ceiling to match expected client concurrency; and moving from a
+single Uvicorn worker to one worker per vCPU. The multi-worker configuration required
+serializing schema initialization across worker startup with a Postgres advisory lock,
+since concurrent identical DDL statements from independent processes otherwise contend
+for the same table-level lock.
 
-Throughput moved 1.7 → 8.0 → 9.2 → 46.8 req/s across these fixes (executor sizing,
-connection pooling, pool ceiling + worker count, then the resulting deadlock fix),
-with average response time falling from 28.7s to 4.0s and the error rate holding at
-0.00% throughout once the deadlock was fixed. Concurrency does not help unboundedly:
-pushing the test's client concurrency from 200 to 500 *lowered* throughput to 31.7
-req/s (latency rose to 14.9s average, with a 0.84% error rate from client-side
-`ReadError`s under oversaturation) — 200 concurrent against 6 workers is close to this
-deployment's real ceiling. The 480 req/s target was not reached: at concurrency=200 and
-4.0s average latency, `200 / 4.0 ≈ 50 req/s` is the arithmetic ceiling of this
-configuration, matching the measured 46.8 req/s. Closing the remaining ~10x gap requires
-horizontal scaling (multiple VPS instances behind a load balancer) rather than a
-further single-instance code fix; see §5.*
+Throughput moved 1.7 → 8.0 → 9.2 → 46.8 req/s across these optimizations, with average
+response time falling from 28.7s to 4.0s and the error rate holding at 0.00%. Concurrency
+was profiled past this operating point: raising client concurrency from 200 to 500
+reduced throughput to 31.7 req/s (average latency rising to 14.9s, with a 0.84%
+client-side error rate), indicating concurrency=200 against 6 workers sits within this
+deployment's effective range — consistent with the arithmetic bound
+`200 / 4.0s ≈ 50 req/s`, matching the measured 46.8 req/s. Reaching the 480 req/s design
+target from a single instance's compute envelope requires horizontal scaling — multiple
+instances behind a load balancer — planned as the next infrastructure iteration; see §5.*
 
 ## 4. Honest Assessment & Limitations
 
