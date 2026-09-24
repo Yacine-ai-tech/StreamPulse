@@ -13,7 +13,14 @@
 - **Live dashboard** via WebSocket (`/live`) or Server-Sent Events (`/live/sse`)
 - **n8n custom node + 5 importable workflows** in `connectors/n8n/`
 - **Prefect 3 flow** for retried, scheduled execution in `orchestration/prefect_flow.py`
-- **dlt declarative sources** for Gmail / Sheets / webhook in `ingestion/dlt_sources.py`
+- **dlt declarative sources** for Gmail / Sheets / webhook in `ingestion/dlt_sources.py`.
+  `run_webhook_pipeline()` runs the webhook source through a real dlt pipeline with
+  merge-based incremental loading (deduplicated by a content-hash primary key) —
+  the one source needing no external OAuth credential, so it's the one with a real,
+  runnable end-to-end test (`tests/test_dlt_sources.py`, DuckDB destination by
+  default; pass `destination="postgres"` for production). `gmail_source`/
+  `gsheet_source` need a `token.json` this repo doesn't ship and degrade to an
+  empty generator without one.
 - **Advanced storage**: pgvector for embedding cache, DuckDB for analytics queries (optional)
 - **2026 stack**: BAAI/bge-m3 embeddings, LiteLLM multi-provider, configurable thresholds
 
