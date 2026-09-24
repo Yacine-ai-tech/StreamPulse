@@ -244,8 +244,8 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                     last_desc = f"{type(e).__name__}: {e}"
                     # This endpoint's HTTP wrapper (app.py's /embed route) always answers
                     # 503 for every internal failure mode of the wake protocol -- a
-                    # genuinely-still-waking studio, "no_studio_available", an origin
-                    # error from a studio mid-boot -- not just the ones whose error text
+                    # genuinely-still-waking backend, "no_backend_available", an origin
+                    # error from a backend mid-boot -- not just the ones whose error text
                     # happens to contain a recognizable substring. So a 503 from THIS
                     # host is always worth continuing to poll for; only a different
                     # status code (auth, bad request, etc.) or a body that doesn't even
