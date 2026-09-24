@@ -48,7 +48,7 @@ app = FastAPI(title="StreamPulse", version="0.1.0",
               description="Real-time business data pipeline.")
 
 # Where the anonymous startup ping goes when the deployer hasn't set TELEMETRY_URL.
-# Telemetry is ON BY DEFAULT and documented in TELEMETRY.md; TELEMETRY_OPT_OUT=true
+# Telemetry is ON BY DEFAULT and documented in README.md's Anonymous Telemetry section; TELEMETRY_OPT_OUT=true
 # disables it completely, and setting TELEMETRY_URL="" also disables it.
 DEFAULT_TELEMETRY_URL = "https://gateway.ysiddo-ai-projects.app/telemetry"
 
@@ -60,7 +60,7 @@ def _telemetry_instance_id() -> str:
     A random, locally-generated install ID — NOT derived from MAC address or any other
     hardware fingerprint. Persisted under LOGS_DIR so repeat startups of the same install
     report the same ID (for dedup on the receiving end); delete the file to reset it.
-    See TELEMETRY.md for why this is a random UUID rather than a hardware-derived value.
+    See README.md's Anonymous Telemetry section for why this is a random UUID rather than a hardware-derived value.
     """
     id_file = os.path.join(settings.LOGS_DIR, ".telemetry_instance_id")
     try:
@@ -83,7 +83,7 @@ def _send_telemetry():
     """
     One anonymous startup ping per ~6h to TELEMETRY_URL, so the project can count distinct
     installs. Sends only {service, event, version, instance_id} — no ingested records,
-    filenames, IPs, or other request data. See TELEMETRY.md.
+    filenames, IPs, or other request data. See README.md's Anonymous Telemetry section.
 
     On by default: TELEMETRY_URL defaults to the project's own collector. Disable entirely
     with TELEMETRY_OPT_OUT=true, which returns before any file access or network call is
