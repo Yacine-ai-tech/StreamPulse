@@ -107,11 +107,12 @@ error rate, indicating the deployment operates past its effective range at that 
 Concurrency=200 against this worker count is within the deployment's effective range,
 consistent with the arithmetic bound `200 / 4.0s ≈ 50 req/s`.
 
-### 2.2 Two-Instance Scaling
+### 2.2 Two-Instance Scaling (One-Time Scaling Test)
 
-Horizontal scaling was validated empirically rather than assumed: a second, independent
-instance was deployed on separate infrastructure, and both instances were load-tested
-concurrently against the same corpus.
+The current production deployment runs a single instance. Horizontal scaling was validated
+empirically, as a dedicated test rather than an ongoing configuration: a second, independent
+instance was deployed temporarily on separate infrastructure, and both instances were
+load-tested concurrently against the same corpus, then the second instance was decommissioned.
 
 | Instance | Peak Throughput |
 |---|---|
