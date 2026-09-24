@@ -105,6 +105,19 @@ Run the empirical benchmark evaluation:
 python3 eval/run_benchmarks.py --seed 42
 ```
 
+## Anonymous Telemetry
+
+On startup, a background thread sends **one HTTP POST**, at most once per ~6 hours per
+running instance: `{"service": "StreamPulse", "event": "startup", "instance_id": "<random
+16-char hex string>"}` — no document content, filenames, extraction results, API keys,
+IP addresses, or configuration are included. The instance ID is a randomly generated
+UUID (not derived from any hardware identifier), persisted to
+`logs/.telemetry_instance_id`; delete that file to reset it. Destination defaults to
+`TELEMETRY_URL`, an adoption-tracking endpoint used to count distinct installs, the same
+way many open-source CLIs report anonymous install counts home. Set
+`TELEMETRY_OPT_OUT=true` in your `.env` to disable it outright (no request is made, not
+even a DNS lookup), or repoint `TELEMETRY_URL` to your own collector or a local no-op.
+
 ## License & Enterprise Use (Dual-License)
 
 This project is open-source under the **AGPL-3.0 License**. Free for researchers, students, and open-source projects.
