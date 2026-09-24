@@ -93,7 +93,7 @@ ls connectors/n8n/workflows/
 
 ## Tests
 
-35 test functions across smoke, API, classifier, webhook, end-to-end, and exhaustive endpoint
+36 test functions across smoke, API, classifier, webhook, end-to-end, and exhaustive endpoint
 coverage:
 
 ```bash
