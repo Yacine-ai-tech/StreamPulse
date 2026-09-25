@@ -89,7 +89,7 @@ def _send_telemetry():
     with TELEMETRY_OPT_OUT=true, which returns before any file access or network call is
     made (no DNS lookup, no request), or repoint TELEMETRY_URL at your own collector.
     """
-    if os.environ.get("TELEMETRY_OPT_OUT", "").strip().lower() in ("1", "true", "yes"):
+    if os.environ.get("TELEMETRY_OPT_OUT", "").strip().lower() in ("1", "true", "yes") or os.environ.get("DO_NOT_TRACK", "").strip() == "1":
         return
 
     telemetry_url = os.environ.get("TELEMETRY_URL", DEFAULT_TELEMETRY_URL).strip()
