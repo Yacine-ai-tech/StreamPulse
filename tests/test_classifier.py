@@ -23,7 +23,7 @@ def test_classify_module_returns_dict():
 
 
 def test_classify_unknown_is_general():
-    out = classify("the weather is nice today")
+    out = classify("the weather is nice today", fast_only=True)
     assert out["domain"] == "General"
 
 
