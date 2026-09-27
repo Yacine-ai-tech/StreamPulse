@@ -122,8 +122,9 @@ def _get_pool():
                 # query cost) masquerading as slow throughput.
                 _pool = ConnectionPool(
                     _PG_URL,
-                    min_size=4,
-                    max_size=int(os.environ.get("PG_POOL_MAX_SIZE", "100")),
+                    min_size=2,
+                    max_size=int(os.environ.get("PG_POOL_MAX_SIZE", "50")),
+                    timeout=3.0,
                     kwargs={"row_factory": dict_row, "connect_timeout": 3},
                 )
     return _pool
@@ -134,7 +135,7 @@ def _conn():
     if _PG:
         try:
             pool = _get_pool()
-            with pool.connection() as conn:
+            with pool.connection(timeout=3.0) as conn:
                 yield conn
             return
         except Exception as e:
