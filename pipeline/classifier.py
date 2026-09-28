@@ -214,6 +214,7 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
 
     if os.getenv("PYTEST_CURRENT_TEST") and settings.INFERENCE_MODE != "remote":
         import hashlib
+
         def _mock_vec(text: str) -> List[float]:
             h = int(hashlib.md5(text.encode("utf-8")).hexdigest(), 16)
             return [float((h + i) % 100) / 100.0 for i in range(1024)]
