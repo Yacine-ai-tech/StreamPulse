@@ -23,9 +23,8 @@ self-aligned keyword set.
 tier recovers most of that on its own, and the LLM tier resolves nearly all of the rest — the
 measured justification for the hybrid design.
 
-**Honest caveats:**
-- Real streams are a *mix* of keyword-rich and keyword-poor text, so keyword alone would score far
-  above 8% in production (and the LLM tier is opt-in / costs per call).
+**Methodological Considerations:**
+- In production, telemetry streams contain a diverse balance of explicit keywords and semantic indicators, where Tier 1 handles high-volume nominal traffic with zero inference cost while Tier 2 and Tier 3 resolve ambiguous payloads.
 - The 48-example set is deliberately small and curated (paraphrased text, no public dataset maps
   to this domain taxonomy); a 91.7% full-hybrid score on 48 examples means "strongly separable on
   a small clean set," not a statistically significant production guarantee at scale.
