@@ -65,9 +65,13 @@ frontend/test-results/
 
 # Internal dev-session architecture notes (not committed) — session-specific
 ARCHITECTURE.md
+architecture.md
+Architecture.md
 *.bak
 .env.bak*
 streampulse.db
 streampulse.db-shm
 streampulse.db-wal
 PROJECT_OVERVIEW.md
+project_overview.md
+Project_Overview.md
