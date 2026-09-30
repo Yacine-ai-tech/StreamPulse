@@ -875,10 +875,16 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     # second provider is configured and available.
     labels = list(DOMAIN_PATTERNS.keys()) + ["General"]
     primary_model = settings.LLM_JUDGE
+    # Static override: no Anthropic/OpenAI key → use Gemini directly (no auth errors at all)
     if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
         primary_model = "gemini/gemini-2.5-flash"
+    # Dynamic override: LLM_JUDGE_FALLBACK set in VPS .env when primary key unavailable
+    env_fallback = os.getenv("LLM_JUDGE_FALLBACK", "")
     gemini_failover = "gemini/gemini-2.5-flash"
     has_gemini_failover = os.getenv("GEMINI_API_KEY") and primary_model != gemini_failover
+
+    _auth_signals = ("AuthenticationError", "PermissionDeniedError", "401", "403",
+                     "invalid_api_key", "invalid api key")
 
     def _call(model: str):
         from litellm import completion
@@ -906,6 +912,19 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
             break  # got a response, just not a valid label — a failover call wouldn't fix that
         except Exception as e:
             from litellm.exceptions import RateLimitError
+            is_auth = any(s.lower() in str(e).lower() or s.lower() in type(e).__name__.lower()
+                          for s in _auth_signals)
+            if is_auth and env_fallback and env_fallback != model:
+                log.warning("LLM classify auth error on %s — retrying with env fallback %s", model, env_fallback)
+                try:
+                    label = _call(env_fallback)
+                    if label in labels:
+                        result = {"domain": label, "confidence": settings.CLASSIFIER_LLM_CONFIDENCE, "method": "llm_env_fallback"}
+                        _cache_classification(content, result)
+                        return result
+                except Exception as fb_e:
+                    log.warning("LLM classify env fallback %s also failed: %s", env_fallback, fb_e)
+                break
             if is_failover or not isinstance(e, RateLimitError):
                 log.warning("LLM classify escalation failed (%s): %s", model, e)
                 break
@@ -914,6 +933,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_fallback"}
     # Do not cache this result to prevent cache poisoning during LLM outages
     return result
+
 
 
 __all__ = [
