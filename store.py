@@ -107,6 +107,14 @@ _initialized = False
 # time even for a request whose classification resolves free, in-process, at the
 # keyword tier. A process-lifetime pool amortizes that handshake across requests instead.
 _pool = None
+def _get_pooler_url(url: str) -> str:
+    """Enforce Neon PgBouncer -pooler endpoint to eliminate TCP/TLS handshake latency."""
+    if not url or "-pooler" in url or "neon.tech" not in url:
+        return url
+    import re
+    return re.sub(r'(@ep-[a-z0-9-]+)(\.[a-z0-9-.]*neon\.tech)', r'\1-pooler\2', url)
+
+
 _pool_lock = threading.Lock()
 
 
@@ -116,17 +124,19 @@ def _get_pool():
         with _pool_lock:
             if _pool is None:  # re-check inside the lock — another thread may have won the race
                 from psycopg_pool import ConnectionPool
-                # max_size was 20 while burst tests ran at concurrency 50+ — every
-                # request beyond 20 in flight queued for a pool slot even though its
-                # own query was fast, which is real, measured queueing latency (not
-                # query cost) masquerading as slow throughput.
+                pool_url = _get_pooler_url(_PG_URL)
                 _pool = ConnectionPool(
-                    _PG_URL,
+                    pool_url,
                     min_size=2,
                     max_size=int(os.environ.get("PG_POOL_MAX_SIZE", "50")),
-                    timeout=3.0,
-                    kwargs={"row_factory": dict_row, "connect_timeout": 3},
+                    timeout=10.0,
+                    max_idle=300,
+                    reconnect_timeout=30,
+                    reconnect_failed=None,
+                    check=ConnectionPool.check_connection,
+                    kwargs={"row_factory": dict_row, "connect_timeout": 5, "options": "-c statement_timeout=30000"},
                 )
+                log.info("✅ StreamPulse Neon connection pool initialized (min=2, pooler enabled)")
     return _pool
 
 
