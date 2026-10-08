@@ -2,18 +2,18 @@
 
 [![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Live App](https://img.shields.io/badge/Live_App-streampulse--ui-0070f3?style=flat&logo=vercel)](https://streampulse-ui-2026.vercel.app)
-[![Research](https://img.shields.io/badge/Research-Cascade_Architecture-8a2be2?style=flat)](https://streampulse-ui-2026.vercel.app/research)
-[![Benchmarks](https://img.shields.io/badge/Benchmarks-Macro--F1_0.990-green?style=flat)](https://streampulse-ui-2026.vercel.app/benchmark)
-[![Guide](https://img.shields.io/badge/Docs-User_Guide-blue?style=flat)](https://streampulse-ui-2026.vercel.app/guide)
+[![Live App](https://img.shields.io/badge/Live_App-streampulse-0070f3?style=flat)](https://streampulse.ysiddo-ai-projects.app)
+[![Research](https://img.shields.io/badge/Research-Cascade_Architecture-8a2be2?style=flat)](https://streampulse.ysiddo-ai-projects.app/research)
+[![Benchmarks](https://img.shields.io/badge/Benchmarks-Macro--F1_0.990-green?style=flat)](https://streampulse.ysiddo-ai-projects.app/benchmark)
+[![Guide](https://img.shields.io/badge/Docs-User_Guide-blue?style=flat)](https://streampulse.ysiddo-ai-projects.app/guide)
 
 **A real-time business data pipeline.** Six source types, a hybrid classification cascade, a
 live dashboard, and first-class n8n integration.
 
-**Live Application:** [streampulse-ui-2026.vercel.app](https://streampulse-ui-2026.vercel.app) (also accessible at [streampulse.ysiddo-ai-projects.app](https://streampulse.ysiddo-ai-projects.app)) — real-time event streaming at `/live/sse`.
-- **Research Background:** [`RESEARCH.md`](RESEARCH.md) / [Online Research Documentation](https://streampulse-ui-2026.vercel.app/research)
-- **Empirical Benchmarks:** [`BENCHMARK.md`](BENCHMARK.md) / [Online Benchmark Dashboard](https://streampulse-ui-2026.vercel.app/benchmark)
-- **User Guide:** [Online User Guide](https://streampulse-ui-2026.vercel.app/guide)
+**Live Application:** [streampulse.ysiddo-ai-projects.app](https://streampulse.ysiddo-ai-projects.app) — real-time event streaming at `/live/sse`.
+- **Research Background:** [`RESEARCH.md`](RESEARCH.md) / [Online Research Documentation](https://streampulse.ysiddo-ai-projects.app/research)
+- **Empirical Benchmarks:** [`BENCHMARK.md`](BENCHMARK.md) / [Online Benchmark Dashboard](https://streampulse.ysiddo-ai-projects.app/benchmark)
+- **User Guide:** [Online User Guide](https://streampulse.ysiddo-ai-projects.app/guide)
 - **Self-Hosting Guide:** [`SELF_HOSTING.md`](SELF_HOSTING.md)
 
 ## What It Does
