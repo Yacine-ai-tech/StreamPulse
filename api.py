@@ -204,6 +204,9 @@ app.add_middleware(InternalTokenMiddleware)
 app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS or ["*"],
                    allow_methods=["*"], allow_headers=["*"])
 
+from fastapi.middleware.gzip import GZipMiddleware
+app.add_middleware(GZipMiddleware, minimum_size=1000)
+
 
 try:
     _assets_dir = _os.path.join(_os.path.dirname(__file__), "frontend", "dist", "assets")
