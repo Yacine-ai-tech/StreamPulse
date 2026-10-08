@@ -134,7 +134,7 @@ def _get_pool():
                     reconnect_timeout=30,
                     reconnect_failed=None,
                     check=ConnectionPool.check_connection,
-                    kwargs={"row_factory": dict_row, "connect_timeout": 5, "options": "-c statement_timeout=30000"},
+                    kwargs={"row_factory": dict_row, "connect_timeout": 5},
                 )
                 log.info("✅ StreamPulse Neon connection pool initialized (min=2, pooler enabled)")
     return _pool
