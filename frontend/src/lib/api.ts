@@ -97,7 +97,7 @@ const post = (body: unknown) => ({
 export const api = {
   health: () => req<{ status: string }>("/health"),
   status: () => req<{ status: string; connected_clients: number }>("/pipeline/status"),
-  history: (limit = 100) => req<{ history: HistoryRow[] }>(`/pipeline/history?limit=${limit}`),
+  history: (limit = 100) => req<{ history: HistoryRow[] }>(`/pipeline/history?limit=${limit}&session_id=${demoSessionId()}`),
   ingestJson: (records: Record<string, unknown>[], source: string) =>
     req<IngestResult>("/ingest/json", post({ records, source })),
   ingestEmail: (payload: Record<string, unknown>) =>
