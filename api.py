@@ -574,11 +574,18 @@ async def webhook_with_vision(
 
 @app.get("/pipeline/status")
 async def pipeline_status(
+    session_id: Optional[str] = None,
+    include_seed: bool = False,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
 ) -> Dict[str, Any]:
+    admin_secret = os.getenv("ADMIN_TOKEN")
+    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    effective_session = session_id or x_demo_session_id
+    target_session = "*" if is_admin else effective_session
     out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
     try:
-        out.update(store_stats(session_id=x_demo_session_id))
+        out.update(store_stats(session_id=target_session, include_seed=(is_admin or include_seed)))
     except Exception as e:
         log.warning("store_stats failed: %s", e)
     return out
@@ -587,13 +594,19 @@ async def pipeline_status(
 @app.post("/pipeline/replay/{log_id}")
 async def pipeline_replay(
     log_id: int,
+    session_id: Optional[str] = None,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
 ) -> Dict[str, Any]:
     """Re-ingest the stored payload of a past ingestion event (real replay). Ownership is
     enforced in get_ingestion_row: a log_id from a different visitor's session 404s instead
     of replaying their stored payload — this used to be replayable by anyone who guessed a
     sequential id, regardless of who ingested it."""
-    row = get_ingestion_row(log_id, session_id=x_demo_session_id)
+    admin_secret = os.getenv("ADMIN_TOKEN")
+    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    effective_session = session_id or x_demo_session_id
+    target_session = "*" if is_admin else effective_session
+    row = get_ingestion_row(log_id, session_id=target_session, include_seed=is_admin)
     if not row:
         raise HTTPException(status_code=404, detail="event_not_found")
     try:
@@ -602,13 +615,14 @@ async def pipeline_replay(
         records = None
     if not records:
         raise HTTPException(status_code=422, detail="no_stored_payload")
-    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"), x_demo_session_id=x_demo_session_id)
+    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"), x_demo_session_id=effective_session)
 
 
 @app.get("/pipeline/history")
 async def pipeline_history(
     limit: int = 100,
     session_id: Optional[str] = None,
+    include_seed: bool = False,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     x_streampulse_token: Optional[str] = Header(default=None, alias="X-StreamPulse-Internal-Token"),
@@ -617,7 +631,7 @@ async def pipeline_history(
     is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
     effective_session = session_id or x_demo_session_id
     target_session = "*" if is_admin else effective_session
-    return {"history": get_pipeline_history(limit=limit, session_id=target_session)}
+    return {"history": get_pipeline_history(limit=limit, session_id=target_session, include_seed=(is_admin or include_seed))}
 
 
 @app.websocket("/live")
