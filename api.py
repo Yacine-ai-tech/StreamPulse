@@ -99,7 +99,7 @@ def _send_telemetry():
 
     lock_file = os.path.join(settings.LOGS_DIR, ".telemetry_last_ping")
     try:
-        if os.path.exists(lock_file) and time.time() - os.path.getmtime(lock_file) < 21600:
+        if os.path.exists(lock_file) and time.time() - os.path.getmtime(lock_file) < 30:
             return
         with open(lock_file, "w") as f:
             f.write(str(time.time()))
@@ -609,8 +609,14 @@ async def pipeline_replay(
 async def pipeline_history(
     limit: int = 100,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+    x_streampulse_token: Optional[str] = Header(default=None, alias="X-StreamPulse-Internal-Token"),
 ) -> Dict[str, Any]:
-    return {"history": get_pipeline_history(limit=limit, session_id=x_demo_session_id)}
+    admin_secret = os.getenv("ADMIN_TOKEN") or os.getenv("STREAMPULSE_INTERNAL_TOKEN")
+    is_admin = bool((x_admin_token and admin_secret and x_admin_token == admin_secret) or
+                    (x_streampulse_token and admin_secret and x_streampulse_token == admin_secret))
+    target_session = "*" if is_admin else x_demo_session_id
+    return {"history": get_pipeline_history(limit=limit, session_id=target_session)}
 
 
 @app.websocket("/live")
