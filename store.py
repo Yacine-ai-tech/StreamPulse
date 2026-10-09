@@ -288,6 +288,7 @@ def get_kpi_metrics(
     metric_filter: Optional[str] = None,
     limit: int = 200,
     session_id: Optional[str] = None,
+    include_seed: bool = False,
 ) -> List[Dict[str, Any]]:
     """Fetch KPI records, optionally filtered."""
     init_db()
@@ -298,8 +299,11 @@ def get_kpi_metrics(
         where.append("category = ?"); params.append(category)
     if metric_filter:
         where.append("metric LIKE ?"); params.append(f"%{metric_filter}%")
-    if _demo_session_scoping_enabled() and session_id != "*":
-        where.append("(owner_session_id IS NULL OR owner_session_id = ?)")
+    if _demo_session_scoping_enabled() and session_id and session_id != "*":
+        if include_seed:
+            where.append("(owner_session_id IS NULL OR owner_session_id = ?)")
+        else:
+            where.append("owner_session_id = ?")
         params.append(session_id)
     if where:
         sql += " WHERE " + " AND ".join(where)
@@ -340,12 +344,19 @@ def update_ingestion_log(log_id: int, status: str, records: int = 0,
         )
 
 
-def get_pipeline_history(limit: int = 100, session_id: Optional[str] = None) -> List[Dict[str, Any]]:
+def get_pipeline_history(
+    limit: int = 100,
+    session_id: Optional[str] = None,
+    include_seed: bool = False,
+) -> List[Dict[str, Any]]:
     init_db()
     sql = f"SELECT * FROM {_T_LOG}"
     params: List[Any] = []
-    if _demo_session_scoping_enabled() and session_id != "*":
-        sql += " WHERE (owner_session_id IS NULL OR owner_session_id = ?)"
+    if _demo_session_scoping_enabled() and session_id and session_id != "*":
+        if include_seed:
+            sql += " WHERE (owner_session_id IS NULL OR owner_session_id = ?)"
+        else:
+            sql += " WHERE owner_session_id = ?"
         params.append(session_id)
     sql += " ORDER BY id DESC LIMIT ?"
     params.append(limit)
@@ -354,46 +365,53 @@ def get_pipeline_history(limit: int = 100, session_id: Optional[str] = None) -> 
     return [_clean_row(r) for r in rows]
 
 
-def get_ingestion_row(log_id: int, session_id: Optional[str] = None) -> Optional[Dict[str, Any]]:
+def get_ingestion_row(
+    log_id: int,
+    session_id: Optional[str] = None,
+    include_seed: bool = False,
+) -> Optional[Dict[str, Any]]:
     """session_id enforces ownership for /pipeline/replay: a log_id belonging to a
     different visitor's session returns None instead of that visitor's stored payload."""
     init_db()
     sql = f"SELECT * FROM {_T_LOG} WHERE id = ?"
     params: List[Any] = [log_id]
-    if _demo_session_scoping_enabled() and session_id != "*":
-        sql += " AND (owner_session_id IS NULL OR owner_session_id = ?)"
+    if _demo_session_scoping_enabled() and session_id and session_id != "*":
+        if include_seed:
+            sql += " AND (owner_session_id IS NULL OR owner_session_id = ?)"
+        else:
+            sql += " AND owner_session_id = ?"
         params.append(session_id)
     with _conn() as c:
         row = c.execute(_q(sql, c), params).fetchone()
     return _clean_row(row) if row else None
 
 
-def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
+def store_stats(session_id: Optional[str] = None, include_seed: bool = False) -> Dict[str, Any]:
     """Aggregate counters for /pipeline/status (real, from the persistent store).
 
-    The top-level counts are deliberately platform-wide (connected_clients always was,
-    and a raw count carries no content — unlike get_kpi_metrics/get_pipeline_history,
-    which return actual records and are scoped). session_id, when given, also gets its
-    own breakdown so a caller can tell "the platform" from "what I've actually sent"
-    without the platform totals looking like their own activity."""
+    When session_id is provided without include_seed, returns strictly the stats
+    belonging to this visitor's session so the UI reflects the user's activity.
+    When session_id is None, '*', or include_seed is True, returns global platform totals."""
     init_db()
     recent_since = (datetime.now(timezone.utc) - timedelta(hours=6)).isoformat()
+    scoped = bool(session_id and session_id != "*" and _demo_session_scoping_enabled() and not include_seed)
     with _conn() as c:
-        events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}", c)).fetchone()
-        fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL", c), ("completed",)).fetchone()
-        kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}", c)).fetchone()
-        srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}", c)).fetchone()
-        # Lifetime counts never recover once a handful of old rows failed (a fixed bug
-        # stays "10/77 failed" forever) — recent_* is what alerting should actually key
-        # off, since it reflects whether ingestion is failing *now*.
-        recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ?", c), (recent_since,)).fetchone()
-        recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ? AND (status != ? OR error IS NOT NULL)", c), (recent_since, "completed")).fetchone()
-        session_stats = None
-        if session_id and _demo_session_scoping_enabled():
-            s_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
-            s_kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
+        if scoped:
+            events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
+            fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ? AND (status != ? OR error IS NOT NULL)", c), (session_id, "completed")).fetchone()
+            kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
+            srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG} WHERE owner_session_id = ?", c), (session_id,)).fetchone()
+            recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ? AND updated_at >= ?", c), (session_id, recent_since)).fetchone()
+            recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE owner_session_id = ? AND updated_at >= ? AND (status != ? OR error IS NOT NULL)", c), (session_id, recent_since, "completed")).fetchone()
+        else:
+            events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG}", c)).fetchone()
+            fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE status != ? OR error IS NOT NULL", c), ("completed",)).fetchone()
+            kpis = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_KPI}", c)).fetchone()
+            srcs = c.execute(_q(f"SELECT COUNT(DISTINCT source) AS n FROM {_T_LOG}", c)).fetchone()
+            recent_events = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ?", c), (recent_since,)).fetchone()
+            recent_fails = c.execute(_q(f"SELECT COUNT(*) AS n FROM {_T_LOG} WHERE updated_at >= ? AND (status != ? OR error IS NOT NULL)", c), (recent_since, "completed")).fetchone()
     g = lambda r: (r["n"] if isinstance(r, dict) else r[0]) or 0
-    out = {
+    return {
         "ingestion_events": g(events),
         "failed_events": g(fails),
         "records_stored": g(kpis),
@@ -402,7 +420,5 @@ def store_stats(session_id: Optional[str] = None) -> Dict[str, Any]:
         "recent_failed_events": g(recent_fails),
         "recent_window_hours": 6,
         "backend": "postgres" if _PG else "sqlite",
+        "session_scoped": scoped,
     }
-    if session_id and _demo_session_scoping_enabled():
-        out["your_session"] = {"ingestion_events": g(s_events), "records_stored": g(s_kpis)}
-    return out
