@@ -298,7 +298,7 @@ def get_kpi_metrics(
         where.append("category = ?"); params.append(category)
     if metric_filter:
         where.append("metric LIKE ?"); params.append(f"%{metric_filter}%")
-    if _demo_session_scoping_enabled():
+    if _demo_session_scoping_enabled() and session_id != "*":
         where.append("(owner_session_id IS NULL OR owner_session_id = ?)")
         params.append(session_id)
     if where:
@@ -344,7 +344,7 @@ def get_pipeline_history(limit: int = 100, session_id: Optional[str] = None) -> 
     init_db()
     sql = f"SELECT * FROM {_T_LOG}"
     params: List[Any] = []
-    if _demo_session_scoping_enabled():
+    if _demo_session_scoping_enabled() and session_id != "*":
         sql += " WHERE (owner_session_id IS NULL OR owner_session_id = ?)"
         params.append(session_id)
     sql += " ORDER BY id DESC LIMIT ?"
@@ -360,7 +360,7 @@ def get_ingestion_row(log_id: int, session_id: Optional[str] = None) -> Optional
     init_db()
     sql = f"SELECT * FROM {_T_LOG} WHERE id = ?"
     params: List[Any] = [log_id]
-    if _demo_session_scoping_enabled():
+    if _demo_session_scoping_enabled() and session_id != "*":
         sql += " AND (owner_session_id IS NULL OR owner_session_id = ?)"
         params.append(session_id)
     with _conn() as c:
