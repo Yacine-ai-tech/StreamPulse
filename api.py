@@ -608,14 +608,15 @@ async def pipeline_replay(
 @app.get("/pipeline/history")
 async def pipeline_history(
     limit: int = 100,
+    session_id: Optional[str] = None,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     x_streampulse_token: Optional[str] = Header(default=None, alias="X-StreamPulse-Internal-Token"),
 ) -> Dict[str, Any]:
-    admin_secret = os.getenv("ADMIN_TOKEN") or os.getenv("STREAMPULSE_INTERNAL_TOKEN")
-    is_admin = bool((x_admin_token and admin_secret and x_admin_token == admin_secret) or
-                    (x_streampulse_token and admin_secret and x_streampulse_token == admin_secret))
-    target_session = "*" if is_admin else x_demo_session_id
+    admin_secret = os.getenv("ADMIN_TOKEN")
+    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    effective_session = session_id or x_demo_session_id
+    target_session = "*" if is_admin else effective_session
     return {"history": get_pipeline_history(limit=limit, session_id=target_session)}
 
 
