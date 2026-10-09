@@ -221,7 +221,7 @@ def init_db() -> None:
 
 
 def _demo_session_scoping_enabled() -> bool:
-    return os.environ.get("DEMO_SESSION_SCOPING", "true").lower() == "true"
+    return (os.environ.get("DEMO_SESSION_SCOPING") or "true").strip().lower() not in ("false", "0", "no", "off")
 
 
 def store_kpi_metrics(records: List[Dict[str, Any]], owner_session_id: Optional[str] = None) -> int:
