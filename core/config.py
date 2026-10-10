@@ -53,7 +53,14 @@ class Settings:
     EXTERNAL_WEBHOOK_SCHEMA_TYPE = os.getenv("EXTERNAL_WEBHOOK_SCHEMA_TYPE", "kpi_metrics")
 
     # ── Classifier Configuration ───────────────────────────────────────
-    CLASSIFIER_KEYWORD_THRESHOLD = float(os.getenv("CLASSIFIER_KEYWORD_THRESHOLD", "0.7"))
+    # Keyword confidence formula: 0.4 + (hits * 0.2). A single keyword match
+    # scores 0.6; two hits score 0.8. The previous default of 0.7 required at
+    # least two distinct keyword hits to pass Tier 1, which pushed nearly all
+    # real-world rows (short CSV cells, single-field metrics) into the slow
+    # sentence-transformer Tier 2 / LLM Tier 3 path. Lowering to 0.55 means
+    # any keyword match (score ≥ 0.6) passes Tier 1; rows with no domain signal
+    # at all score 0.3 (no hits) and still escalate normally.
+    CLASSIFIER_KEYWORD_THRESHOLD = float(os.getenv("CLASSIFIER_KEYWORD_THRESHOLD", "0.55"))
     # Calibrated 2026-08-20 against eval/domain_calibration.jsonl (held out from the
     # reported benchmark set) using real embedding scores now that the remote host's
     # wake-retry client actually works (see pipeline/classifier.py's _embed()). Raw
