@@ -456,10 +456,36 @@ async def ingest_json(
         records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id,
     )
 
-    async def _classify_record(r):
-        text_to_classify = r.get("metric", "") + " " + str(r.get("raw", ""))
-        c = await asyncio.to_thread(classify, text_to_classify)
-        return {"source": req.source, **r, **c}
+    # Limit concurrent classification tasks: each slow Tier 2/3 classification
+    # can block for 5–30 s; without a cap, a 100-row CSV spawns 100 simultaneous
+    # asyncio.to_thread calls that saturate the thread pool and starve each other.
+    _classify_sem = asyncio.Semaphore(8)
+
+    # Prefer common metric-name columns so the stored record has a meaningful label.
+    _METRIC_COLS = ("metric", "metric_name", "name", "kpi", "kpi_name", "header", "label", "key")
+
+    async def _classify_record(r: dict) -> dict:
+        async with _classify_sem:
+            # Build classification text from ALL non-empty column values (not just
+            # "metric"/"raw" which are absent from most generic CSVs and spreadsheets).
+            text_parts = [str(v).strip() for v in r.values() if v is not None and str(v).strip()]
+            text_to_classify = " ".join(text_parts[:12])  # cap to first 12 columns
+
+            # Skip costly Tier 2/3 when there is nothing to classify.
+            if not text_to_classify:
+                return {"source": req.source, **r, "domain": "General", "confidence": 0.3, "method": "empty_row"}
+
+            c = await asyncio.to_thread(classify, text_to_classify)
+
+            # Infer a metric name from well-known column names when the record
+            # doesn't already have one, so the stored KPI has a human-readable label.
+            if not r.get("metric"):
+                for col in _METRIC_COLS:
+                    if r.get(col):
+                        r = {**r, "metric": r[col]}
+                        break
+
+            return {"source": req.source, **r, **c}
 
     try:
         enriched = await asyncio.gather(*[_classify_record(r) for r in req.records])
