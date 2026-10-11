@@ -26,3 +26,14 @@ def test_streampulse_session_scoping_query_construction():
     # Admin wildcard bypasses scoping
     admin_stats = store_stats(session_id="*")
     assert admin_stats["session_scoped"] is False
+
+
+def test_pipeline_history_fails_closed_without_admin_or_session(monkeypatch):
+    import store
+
+    def fail_if_database_is_used():
+        raise AssertionError("unscoped visitor history must not query the database")
+
+    monkeypatch.setattr(store, "init_db", fail_if_database_is_used)
+    assert get_pipeline_history(session_id=None) == []
+    assert get_pipeline_history(session_id="*") == []
