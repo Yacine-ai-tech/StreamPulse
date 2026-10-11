@@ -656,8 +656,18 @@ async def pipeline_history(
     admin_secret = os.getenv("ADMIN_TOKEN")
     is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
     effective_session = session_id or x_demo_session_id
-    target_session = "*" if is_admin else effective_session
-    return {"history": get_pipeline_history(limit=limit, session_id=target_session, include_seed=(is_admin or include_seed))}
+    if not is_admin and not effective_session:
+        raise HTTPException(status_code=401, detail="visitor_session_required")
+    if not is_admin and effective_session == "*":
+        raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
+    return {
+        "history": get_pipeline_history(
+            limit=limit,
+            session_id=effective_session,
+            include_seed=(is_admin or include_seed),
+            is_admin=is_admin,
+        )
+    }
 
 
 @app.websocket("/live")
