@@ -59,3 +59,25 @@ def test_internal_token_auth(monkeypatch):
     # Valid token -> 200
     r_valid = client.get("/pipeline/status", headers={"X-Internal-Token": "test-secret-token"})
     assert r_valid.status_code == 200
+
+
+def test_pipeline_history_requires_visitor_session(monkeypatch):
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "false")
+    client = _client()
+
+    assert client.get("/pipeline/history").status_code == 401
+    assert client.get("/pipeline/history?session_id=*").status_code == 403
+
+
+def test_pipeline_history_admin_is_explicit(monkeypatch):
+    import api
+
+    monkeypatch.setenv("ADMIN_TOKEN", "admin-test-token")
+    monkeypatch.setattr(api, "get_pipeline_history", lambda **kwargs: [kwargs])
+    response = _client().get(
+        "/pipeline/history?session_id=*",
+        headers={"X-Admin-Token": "admin-test-token"},
+    )
+
+    assert response.status_code == 200
+    assert response.json()["history"][0]["is_admin"] is True
