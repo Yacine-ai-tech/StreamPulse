@@ -348,11 +348,15 @@ def get_pipeline_history(
     limit: int = 100,
     session_id: Optional[str] = None,
     include_seed: bool = False,
+    is_admin: bool = False,
 ) -> List[Dict[str, Any]]:
+    if not is_admin:
+        if not session_id or session_id == "*":
+            return []
     init_db()
     sql = f"SELECT * FROM {_T_LOG}"
     params: List[Any] = []
-    if _demo_session_scoping_enabled() and session_id and session_id != "*":
+    if not is_admin:
         if include_seed:
             sql += " WHERE (owner_session_id IS NULL OR owner_session_id = ?)"
         else:
