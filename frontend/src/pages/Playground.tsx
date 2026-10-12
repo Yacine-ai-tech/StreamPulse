@@ -141,7 +141,7 @@ export default function Playground() {
               </div>
               <JSONViewer data={result} maxHeight={300} />
               <p className="text-[12.5px] text-muted">
-                Check <strong className="text-dim">Live Operations</strong> — this batch was broadcast to every connected client, classified per record.
+                Check <strong className="text-dim">Live Operations</strong> — this batch was broadcast to this demo session, classified per record.
               </p>
             </motion.div>
           )}
