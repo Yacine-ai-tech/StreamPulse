@@ -49,15 +49,16 @@ export default function UserGuidePage() {
             <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
               <h3 className="font-semibold text-amber-400 text-lg mb-2">3. Store &amp; broadcast</h3>
               <p className="text-sm text-gray-300">
-                The classified record is persisted (Postgres in production, SQLite locally), broadcast to every
-                connected <code>/live</code> WebSocket client, and — if <code>EXTERNAL_WEBHOOK_URL</code> is
+                The classified record is persisted (Postgres in production, SQLite locally), broadcast only to
+                matching demo-session clients (or all clients for authenticated global sources), and — if <code>EXTERNAL_WEBHOOK_URL</code> is
                 configured — forwarded downstream to another system (e.g. IntelAI) as a fire-and-forget call.
               </p>
             </div>
             <div className="bg-gray-900 p-4 rounded-lg border border-gray-700">
               <h3 className="font-semibold text-cyan-400 text-lg mb-2">4. Watch it live</h3>
               <p className="text-sm text-gray-300">
-                The dashboard (and any external client) can subscribe to <code>WS /live</code> for push updates, or
+                The dashboard (and any external client) can subscribe to <code>WS /live?session_id=...</code> for
+                updates scoped to that session, or
                 fall back to <code>GET /live/sse</code> (polls the last 5 history rows every 5 seconds) when a
                 WebSocket connection isn't available.
               </p>
@@ -157,9 +158,8 @@ export default function UserGuidePage() {
             <li>A missing or mismatched signature returns <code>401 {'{"detail":"invalid_signature"}'}</code>; malformed JSON returns <code>400 {'{"detail":"invalid_json"}'}</code>.</li>
           </ul>
           <p className="text-sm text-gray-300 mb-3">
-            Real webhook callers (n8n, GitHub, a CRM) intentionally never send an <code>X-Demo-Session-Id</code>{' '}
-            header — their data stays globally visible in the pipeline by design, since that header only exists to
-            isolate anonymous demo visitors from each other (see below).
+            Valid HMAC signatures authorize webhook callers (n8n, GitHub, a CRM) to create globally visible records.
+            Direct JSON, CSV, or email ingestion without a demo-session id requires a valid internal service token.
           </p>
           <div className="bg-gray-950 border border-gray-800 rounded-lg p-4 flex items-start gap-3">
             <Activity className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
@@ -220,17 +220,15 @@ export default function UserGuidePage() {
             <ShieldCheck className="w-6 h-6 text-emerald-400" /> Demo Isolation Between Visitors
           </h2>
           <p className="text-sm text-gray-300 mb-3">
-            <span className="font-semibold text-gray-100">Recent fix:</span> <code>GET /pipeline/history</code>,{' '}
-            <code>GET /live/sse</code>, and <code>POST /pipeline/replay/{'{log_id}'}</code> now scope their results
-            to the caller's own <code>X-Demo-Session-Id</code> — a browser-generated id the frontend sends with its
-            own test traffic — plus any session-less data. Previously a demo visitor could see (and replay) every
-            other visitor's test events by guessing a sequential <code>log_id</code>; ownership is now enforced in{' '}
-            <code>store.py</code>.
+            <code>GET /pipeline/history</code>, <code>GET /live/sse</code>, <code>WS /live</code>, and{' '}
+            <code>POST /pipeline/replay/{'{log_id}'}</code> are scoped to the caller's own
+            {' '}<code>X-Demo-Session-Id</code> (or <code>?session_id=</code> for streaming clients) plus authenticated
+            global data. WebSocket sessions cannot receive another visitor's records, and replay requires the
+            matching visitor session or an admin token.
           </p>
           <p className="text-sm text-gray-300">
-            This is anonymous demo isolation, not production auth: real external webhooks, n8n workflows, and CRM
-            sources never send <code>X-Demo-Session-Id</code>, so their data is always stored session-less and
-            stays globally visible — that's the intended behavior of a public ingestion demo. Because browsers'
+            This is anonymous demo isolation, not production auth. Global records can be created only by requests
+            with a valid internal service token or by webhook calls with a valid HMAC signature. Because browsers'
             native <code>EventSource</code> can't set custom headers, <code>/live/sse</code> also accepts the same
             id via a <code>?session_id=</code> query parameter (the header wins if both are present).
           </p>
