@@ -227,8 +227,8 @@ def _demo_session_scoping_enabled() -> bool:
 def store_kpi_metrics(records: List[Dict[str, Any]], owner_session_id: Optional[str] = None) -> int:
     """Insert classified metrics into persistent store. Returns count inserted.
 
-    owner_session_id=None writes rows visible to every visitor (the default for real
-    external webhooks/n8n/CRM sources — that's the point of a public ingestion demo).
+    owner_session_id=None writes rows visible to every visitor. API ingestion only
+    permits this for authenticated service callers or successfully signed webhooks.
     A visitor testing ingestion through the frontend UI gets their browser's
     X-Demo-Session-Id here instead, so their test data isn't shown to other visitors.
     Anonymous demo isolation, not production auth — see DEMO_SESSION_SCOPING.
