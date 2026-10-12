@@ -41,7 +41,7 @@ async def test_e2e_streampulse_n8n_sync_trigger():
 @pytest.mark.asyncio
 async def test_e2e_streampulse_live_firehose():
     # Test websocket live stream
-    with client.websocket_connect("/live", headers=HEADERS) as websocket:
+    with client.websocket_connect("/live?session_id=e2e-demo", headers=HEADERS) as websocket:
         websocket.send_text("hello")
         # Just connecting and sending text successfully is enough for the simple route
         pass

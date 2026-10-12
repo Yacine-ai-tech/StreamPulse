@@ -72,11 +72,12 @@ const ENDPOINTS: Endpoint[] = [
     method: "POST",
     path: "/ingest/json",
     category: "Ingestion",
-    auth: "Optional X-Demo-Session-Id",
+    auth: "X-Demo-Session-Id or internal service token",
     desc: "Ingest a batch of arbitrary JSON records. Shared entry point: /ingest/csv, /ingest/email and both webhook routes all normalize into this same call.",
-    note: "Each record is run through the 3-tier classifier (domain + confidence + method fields are appended), stored, broadcast to every connected /live client, and — if EXTERNAL_WEBHOOK_URL is configured — forwarded downstream (e.g. to IntelAI) as a fire-and-forget task.",
+    note: "Each record is classified and stored. Demo records are sent only to matching /live sessions. A missing demo-session id requires a valid internal service token for global ingestion; signed webhook routes also authorize global writes. If EXTERNAL_WEBHOOK_URL is configured, records are forwarded downstream as a fire-and-forget task.",
     headers: [
-      { name: "X-Demo-Session-Id", required: false, desc: "Browser/demo visitor id. Omit for real integrations — data stays globally visible by design (see Pipeline notes)." },
+      { name: "X-Demo-Session-Id", required: false, desc: "Browser/demo visitor id. Required for anonymous demo writes; global writes require a valid internal service token." },
+      { name: "X-StreamPulse-Internal-Token", required: false, desc: "Required instead of X-Demo-Session-Id when creating globally visible records through this endpoint." },
     ],
     bodyLabel: "application/json",
     body: `{
@@ -92,20 +93,21 @@ const ENDPOINTS: Endpoint[] = [
   "log_id": 42
 }`,
     snippets: {
-      curl: `curl -X POST "${BASE_URL}/ingest/json" \\\n  -H "Content-Type: application/json" \\\n  -d '{"records":[{"metric":"revenue","value":128000,"period":"2026-Q3"}],"source":"manual_json"}'`,
-      python: `import requests\n\nresp = requests.post(\n    "${BASE_URL}/ingest/json",\n    json={\n        "records": [{"metric": "revenue", "value": 128000, "period": "2026-Q3"}],\n        "source": "manual_json",\n    },\n)\nprint(resp.json())`,
-      node: `const res = await fetch("${BASE_URL}/ingest/json", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({\n    records: [{ metric: "revenue", value: 128000, period: "2026-Q3" }],\n    source: "manual_json",\n  }),\n});\nconsole.log(await res.json());`,
+      curl: `curl -X POST "${BASE_URL}/ingest/json" \\\n  -H "Content-Type: application/json" \\\n  -H "X-Demo-Session-Id: demo-123" \\\n  -d '{"records":[{"metric":"revenue","value":128000,"period":"2026-Q3"}],"source":"manual_json"}'`,
+      python: `import requests\n\nresp = requests.post(\n    "${BASE_URL}/ingest/json",\n    headers={"X-Demo-Session-Id": "demo-123"},\n    json={\n        "records": [{"metric": "revenue", "value": 128000, "period": "2026-Q3"}],\n        "source": "manual_json",\n    },\n)\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/ingest/json", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", "X-Demo-Session-Id": "demo-123" },\n  body: JSON.stringify({\n    records: [{ metric: "revenue", value: 128000, period: "2026-Q3" }],\n    source: "manual_json",\n  }),\n});\nconsole.log(await res.json());`,
     },
   },
   {
     method: "POST",
     path: "/ingest/csv",
     category: "Ingestion",
-    auth: "Optional X-Demo-Session-Id",
+    auth: "X-Demo-Session-Id or internal service token",
     desc: "Upload a CSV file; each row becomes one record. Column headers are used as record keys (metric, value, period, category, ... — anything matching IngestJsonRequest fields is picked up).",
     note: "Parsed rows are handed to the same handler as /ingest/json, so the response shape (and classification/broadcast/forwarding behavior) is identical.",
     headers: [
-      { name: "X-Demo-Session-Id", required: false, desc: "Same as /ingest/json." },
+      { name: "X-Demo-Session-Id", required: false, desc: "Same as /ingest/json; required for anonymous demo writes." },
+      { name: "X-StreamPulse-Internal-Token", required: false, desc: "Required instead of X-Demo-Session-Id for globally visible records." },
     ],
     bodyLabel: "multipart/form-data",
     body: `file:   <binary CSV>\nsource: csv_upload   # optional form field, this is the default`,
@@ -116,20 +118,21 @@ const ENDPOINTS: Endpoint[] = [
   "log_id": 43
 }`,
     snippets: {
-      curl: `curl -X POST "${BASE_URL}/ingest/csv" \\\n  -F "file=@metrics.csv" \\\n  -F "source=csv_upload"`,
-      python: `import requests\n\nwith open("metrics.csv", "rb") as f:\n    resp = requests.post(\n        "${BASE_URL}/ingest/csv",\n        files={"file": f},\n        data={"source": "csv_upload"},\n    )\nprint(resp.json())`,
-      node: `const form = new FormData();\nform.append("file", fileBlob, "metrics.csv");\nform.append("source", "csv_upload");\nconst res = await fetch("${BASE_URL}/ingest/csv", { method: "POST", body: form });\nconsole.log(await res.json());`,
+      curl: `curl -X POST "${BASE_URL}/ingest/csv" \\\n  -H "X-Demo-Session-Id: demo-123" \\\n  -F "file=@metrics.csv" \\\n  -F "source=csv_upload"`,
+      python: `import requests\n\nwith open("metrics.csv", "rb") as f:\n    resp = requests.post(\n        "${BASE_URL}/ingest/csv",\n        headers={"X-Demo-Session-Id": "demo-123"},\n        files={"file": f},\n        data={"source": "csv_upload"},\n    )\nprint(resp.json())`,
+      node: `const form = new FormData();\nform.append("file", fileBlob, "metrics.csv");\nform.append("source", "csv_upload");\nconst res = await fetch("${BASE_URL}/ingest/csv", { method: "POST", headers: { "X-Demo-Session-Id": "demo-123" }, body: form });\nconsole.log(await res.json());`,
     },
   },
   {
     method: "POST",
     path: "/ingest/email",
     category: "Ingestion",
-    auth: "Optional X-Demo-Session-Id",
+    auth: "X-Demo-Session-Id or internal service token",
     desc: "Accept a Gmail-style JSON payload (subject/from/body) and treat it as a single record.",
     note: "Wraps the payload as {\"source\":\"email\",\"raw\":payload,\"metric\":payload.subject} and reuses /ingest/json — same response shape, source is always \"email\".",
     headers: [
-      { name: "X-Demo-Session-Id", required: false, desc: "Same as /ingest/json." },
+      { name: "X-Demo-Session-Id", required: false, desc: "Same as /ingest/json; required for anonymous demo writes." },
+      { name: "X-StreamPulse-Internal-Token", required: false, desc: "Required instead of X-Demo-Session-Id for globally visible records." },
     ],
     bodyLabel: "application/json",
     body: `{
@@ -144,9 +147,9 @@ const ENDPOINTS: Endpoint[] = [
   "log_id": 44
 }`,
     snippets: {
-      curl: `curl -X POST "${BASE_URL}/ingest/email" \\\n  -H "Content-Type: application/json" \\\n  -d '{"subject":"Q3 revenue update","from":"cfo@example.com","body":"We closed Q3 at 128k in revenue."}'`,
-      python: `import requests\n\nresp = requests.post(\n    "${BASE_URL}/ingest/email",\n    json={\n        "subject": "Q3 revenue update",\n        "from": "cfo@example.com",\n        "body": "We closed Q3 at 128k in revenue.",\n    },\n)\nprint(resp.json())`,
-      node: `const res = await fetch("${BASE_URL}/ingest/email", {\n  method: "POST",\n  headers: { "Content-Type": "application/json" },\n  body: JSON.stringify({ subject: "Q3 revenue update", from: "cfo@example.com", body: "..." }),\n});\nconsole.log(await res.json());`,
+      curl: `curl -X POST "${BASE_URL}/ingest/email" \\\n  -H "Content-Type: application/json" \\\n  -H "X-Demo-Session-Id: demo-123" \\\n  -d '{"subject":"Q3 revenue update","from":"cfo@example.com","body":"We closed Q3 at 128k in revenue."}'`,
+      python: `import requests\n\nresp = requests.post(\n    "${BASE_URL}/ingest/email",\n    headers={"X-Demo-Session-Id": "demo-123"},\n    json={\n        "subject": "Q3 revenue update",\n        "from": "cfo@example.com",\n        "body": "We closed Q3 at 128k in revenue.",\n    },\n)\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/ingest/email", {\n  method: "POST",\n  headers: { "Content-Type": "application/json", "X-Demo-Session-Id": "demo-123" },\n  body: JSON.stringify({ subject: "Q3 revenue update", from: "cfo@example.com", body: "..." }),\n});\nconsole.log(await res.json());`,
     },
   },
   {
@@ -155,7 +158,7 @@ const ENDPOINTS: Endpoint[] = [
     category: "Webhooks",
     auth: "HMAC-SHA256 (X-Signature-256)",
     desc: "Generic signed webhook receiver. {source_name} is a free-form label (e.g. github, clickup, n8n) recorded as the record's source.",
-    note: "No X-Demo-Session-Id is read here on purpose: real external webhook callers (n8n, CRMs, GitHub, etc.) aren't browsers, so their data always stays globally visible — that's the point of a public ingestion demo.",
+    note: "A valid HMAC signature authorizes a webhook to create globally visible records. Missing or invalid signatures are rejected before ingestion.",
     headers: [
       { name: "X-Signature-256", required: true, desc: "sha256=<hex HMAC-SHA256 of the raw request body, keyed with WEBHOOK_SECRET>. Missing or mismatched signature returns 401 {\"detail\":\"invalid_signature\"}." },
     ],
@@ -212,8 +215,13 @@ const ENDPOINTS: Endpoint[] = [
     method: "GET",
     path: "/pipeline/status",
     category: "Pipeline",
-    auth: "Public",
-    desc: "Live counters for the pipeline: connected WebSocket clients plus aggregate stats read straight from the store.",
+    auth: "X-Demo-Session-Id or ?session_id= (admin token for global counters)",
+    desc: "Live counters for this demo session plus the connected WebSocket client count. Global counters require an admin token.",
+    query: [{ name: "session_id", desc: "The caller's demo-session id." }],
+    headers: [
+      { name: "X-Demo-Session-Id", required: false, desc: "Scopes counters to this visitor; X-Admin-Token is required for global counters." },
+      { name: "X-Admin-Token", required: false, desc: "Required to read global counters." },
+    ],
     body: null,
     response: `{
   "status": "ok",
@@ -225,21 +233,23 @@ const ENDPOINTS: Endpoint[] = [
   "backend": "postgres"
 }`,
     snippets: {
-      curl: `curl "${BASE_URL}/pipeline/status"`,
-      python: `import requests\n\nresp = requests.get("${BASE_URL}/pipeline/status")\nprint(resp.json())`,
-      node: `const res = await fetch("${BASE_URL}/pipeline/status");\nconsole.log(await res.json());`,
+      curl: `curl "${BASE_URL}/pipeline/status?session_id=demo-123"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/pipeline/status", params={"session_id": "demo-123"})\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/pipeline/status?session_id=demo-123");\nconsole.log(await res.json());`,
     },
   },
   {
     method: "POST",
     path: "/pipeline/replay/{log_id}",
     category: "Pipeline",
-    auth: "Optional X-Demo-Session-Id",
+    auth: "X-Demo-Session-Id or ?session_id= (admin token for unscoped replay)",
     desc: "Re-ingest the stored payload of a past ingestion event — a real replay, not a simulation: it re-runs the original records through classification and storage as a new event.",
     note: "Ownership is enforced: a log_id that belongs to a different visitor's session 404s instead of replaying their stored payload. Returns 422 {\"detail\":\"no_stored_payload\"} if the original event has no records to replay.",
     headers: [
-      { name: "X-Demo-Session-Id", required: false, desc: "Must match the session that created log_id, if that event was session-scoped." },
+      { name: "X-Demo-Session-Id", required: false, desc: "Must match the session that created log_id. Unscoped replay requires X-Admin-Token." },
+      { name: "X-Admin-Token", required: false, desc: "Required to replay an unscoped event." },
     ],
+    query: [{ name: "session_id", desc: "Alternative to the X-Demo-Session-Id header." }],
     body: null,
     response: `{
   "source": "replay:manual_json",
@@ -248,21 +258,24 @@ const ENDPOINTS: Endpoint[] = [
   "log_id": 47
 }`,
     snippets: {
-      curl: `curl -X POST "${BASE_URL}/pipeline/replay/42"`,
-      python: `import requests\n\nresp = requests.post("${BASE_URL}/pipeline/replay/42")\nprint(resp.json())`,
-      node: `const res = await fetch("${BASE_URL}/pipeline/replay/42", { method: "POST" });\nconsole.log(await res.json());`,
+      curl: `curl -X POST "${BASE_URL}/pipeline/replay/42" -H "X-Demo-Session-Id: demo-123"`,
+      python: `import requests\n\nresp = requests.post("${BASE_URL}/pipeline/replay/42", headers={"X-Demo-Session-Id": "demo-123"})\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/pipeline/replay/42", { method: "POST", headers: { "X-Demo-Session-Id": "demo-123" } });\nconsole.log(await res.json());`,
     },
   },
   {
     method: "GET",
     path: "/pipeline/history",
     category: "Pipeline",
-    auth: "Optional X-Demo-Session-Id",
+    auth: "X-Demo-Session-Id or ?session_id= required",
     desc: "Recent ingestion events (most recent first), including the truncated stored payload each one can be replayed from.",
-    note: "Implementation note (recent fix): when DEMO_SESSION_SCOPING is enabled (default), results are scoped to rows with owner_session_id IS NULL (real webhooks/n8n/CRM sources — always globally visible) OR owner_session_id matching the caller's X-Demo-Session-Id. A demo visitor no longer sees every other visitor's test events.",
-    query: [{ name: "limit", desc: "Max rows to return. Default 100." }],
+    note: "Results include the caller's own demo events and globally visible records created only by authenticated service ingestion or successfully signed webhooks. A demo visitor never sees another visitor's session-scoped events.",
+    query: [
+      { name: "limit", desc: "Max rows to return. Default 100." },
+      { name: "session_id", desc: "The caller's demo-session id." },
+    ],
     headers: [
-      { name: "X-Demo-Session-Id", required: false, desc: "Scopes results to this visitor's own events (plus session-less/global events)." },
+      { name: "X-Demo-Session-Id", required: false, desc: "Scopes results to this visitor's own events plus authenticated global events." },
     ],
     body: null,
     response: `{
@@ -275,24 +288,24 @@ const ENDPOINTS: Endpoint[] = [
   ]
 }`,
     snippets: {
-      curl: `curl "${BASE_URL}/pipeline/history?limit=20"`,
-      python: `import requests\n\nresp = requests.get("${BASE_URL}/pipeline/history", params={"limit": 20})\nprint(resp.json())`,
-      node: `const res = await fetch("${BASE_URL}/pipeline/history?limit=20");\nconsole.log(await res.json());`,
+      curl: `curl "${BASE_URL}/pipeline/history?limit=20" -H "X-Demo-Session-Id: demo-123"`,
+      python: `import requests\n\nresp = requests.get("${BASE_URL}/pipeline/history", params={"limit": 20}, headers={"X-Demo-Session-Id": "demo-123"})\nprint(resp.json())`,
+      node: `const res = await fetch("${BASE_URL}/pipeline/history?limit=20", { headers: { "X-Demo-Session-Id": "demo-123" } });\nconsole.log(await res.json());`,
     },
   },
   {
     method: "WS",
     path: "/live",
     category: "Live Streaming",
-    auth: "Public",
-    desc: "WebSocket feed of every ingest event as it's broadcast — the primary channel behind the Live Operations dashboard.",
-    note: "The server sends {\"event\":\"ingest\",\"source\":...,\"records\":[...]} for each completed ingestion, and a {\"type\":\"ping\",\"timestamp\":...} keepalive every 30s of client silence. When MESSAGE_BROKER=redis or kafka is configured, broadcasts are also published on that broker so multiple StreamPulse instances stay in sync — otherwise broadcast is local-process only.",
+    auth: "?session_id= required",
+    desc: "Session-bound WebSocket feed used by the Live Operations dashboard.",
+    note: "The server sends the caller's session-scoped records and authenticated global records, never another visitor's session records. It sends a keepalive every 30 seconds. Redis or Kafka can carry scoped events between instances.",
     body: null,
     response: `{"event": "ingest", "source": "manual_json", "records": [{"metric": "revenue", "value": 128000, "domain": "Finance", "confidence": 0.8, "method": "keyword"}]}`,
     snippets: {
-      curl: `# curl doesn't speak WebSocket; use websocat or a WS client library\nwebsocat "${WS_BASE_URL}/live"`,
-      python: `import asyncio, websockets, json\n\nasync def main():\n    async with websockets.connect("${WS_BASE_URL}/live") as ws:\n        async for msg in ws:\n            print(json.loads(msg))\n\nasyncio.run(main())`,
-      node: `const ws = new WebSocket("${WS_BASE_URL}/live");\nws.onmessage = (e) => console.log(JSON.parse(e.data));`,
+      curl: `# curl doesn't speak WebSocket; use websocat or a WS client library\nwebsocat "${WS_BASE_URL}/live?session_id=demo-123"`,
+      python: `import asyncio, websockets, json\n\nasync def main():\n    async with websockets.connect("${WS_BASE_URL}/live?session_id=demo-123") as ws:\n        async for msg in ws:\n            print(json.loads(msg))\n\nasyncio.run(main())`,
+      node: `const ws = new WebSocket("${WS_BASE_URL}/live?session_id=demo-123");\nws.onmessage = (e) => console.log(JSON.parse(e.data));`,
     },
   },
   {

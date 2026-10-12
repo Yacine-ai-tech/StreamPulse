@@ -44,9 +44,9 @@ const INTERNAL_TOKEN = (
 ).trim();
 const delay = (ms: number) => new Promise(resolve => setTimeout(resolve, ms));
 
-// One anonymous, per-browser id — a visitor testing ingestion through this UI only sees
-// their own test events in /pipeline/history, not other visitors'. Not an auth credential;
-// real external webhooks (n8n, CRM sources) never send this and stay globally visible.
+// One anonymous, per-browser id — demo writes and live events are scoped to this browser.
+// It is not an authentication credential; global ingestion requires a service token or a
+// signed webhook.
 export function demoSessionId(): string {
   const key = "demo_session_id";
   let id = localStorage.getItem(key);
@@ -156,10 +156,10 @@ export function openLive(
   const startWS = () => {
     if (closed) return;
     onState("connecting");
-    const wsUrl = BASE
+    const baseWsUrl = BASE
       ? BASE.replace(/^http/, "ws").replace(/\/$/, "") + "/live"
       : `${location.protocol === "https:" ? "wss" : "ws"}://${location.host}/live`;
-    ws = new WebSocket(wsUrl);
+    ws = new WebSocket(`${baseWsUrl}?session_id=${encodeURIComponent(demoSessionId())}`);
     ws.onopen = () => {
       onState("ws");
       keepalive = window.setInterval(() => ws?.readyState === 1 && ws.send("ping"), 25000);

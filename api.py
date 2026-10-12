@@ -179,22 +179,8 @@ class InternalTokenMiddleware:
         ):
             return await self.app(scope, receive, send)
 
-        token = (
-            request.headers.get("X-StreamPulse-Internal-Token")
-            or request.headers.get("X-Internal-Token")
-            or request.headers.get("X-OmniIntel-Internal-Token")
-            or (request.headers.get("Authorization", "").replace("Bearer ", "") if request.headers.get("Authorization", "").startswith("Bearer ") else "")
-        )
-        expected_tokens = [
-            t for t in (
-                _os.environ.get("STREAMPULSE_INTERNAL_TOKEN"),
-                _os.environ.get("INTERNAL_TOKEN"),
-                _os.environ.get("OMNIINTEL_INTERNAL_TOKEN"),
-            ) if t
-        ]
-
         if _os.environ.get("REQUIRE_INTERNAL_TOKEN", "false").lower() == "true":
-            if not token or not any(hmac.compare_digest(token, exp) for exp in expected_tokens):
+            if not _has_valid_internal_token(request):
                 response = JSONResponse(status_code=403, content={"detail": "Missing or invalid X-Internal-Token"})
                 return await response(scope, receive, send)
 
@@ -206,6 +192,28 @@ app.add_middleware(CORSMiddleware, allow_origins=settings.CORS_ALLOWED_ORIGINS o
                    allow_methods=["*"], allow_headers=["*"])
 
 app.add_middleware(GZipMiddleware, minimum_size=1000)
+
+
+def _has_valid_internal_token(request: Request) -> bool:
+    token = (
+        request.headers.get("X-StreamPulse-Internal-Token")
+        or request.headers.get("X-Internal-Token")
+        or request.headers.get("X-OmniIntel-Internal-Token")
+        or (request.headers.get("Authorization", "").replace("Bearer ", "") if request.headers.get("Authorization", "").startswith("Bearer ") else "")
+    )
+    expected_tokens = (
+        _os.environ.get("STREAMPULSE_INTERNAL_TOKEN"),
+        _os.environ.get("INTERNAL_TOKEN"),
+        _os.environ.get("OMNIINTEL_INTERNAL_TOKEN"),
+    )
+    return bool(token and any(expected and hmac.compare_digest(token, expected) for expected in expected_tokens))
+
+
+def _require_ingestion_scope(request: Request, session_id: Optional[str]) -> None:
+    if session_id == "*":
+        raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
+    if not session_id and not _has_valid_internal_token(request):
+        raise HTTPException(status_code=401, detail="internal_token_required_for_global_ingestion")
 
 
 try:
@@ -275,6 +283,7 @@ except Exception:
 # ─────────────────────────────────────────────────────────────────────────────
 
 _clients: Set[WebSocket] = set()
+_client_sessions: Dict[WebSocket, str] = {}
 
 _MESSAGE_BROKER = os.getenv("MESSAGE_BROKER", "redis").lower()
 _REDIS_URL = os.getenv("REDIS_URL")
@@ -347,13 +356,18 @@ async def _setup_kafka():
 
 async def _local_broadcast(payload: Dict[str, Any]) -> None:
     dead: List[WebSocket] = []
+    owner_session_id = payload.get("_owner_session_id")
+    public_payload = {key: value for key, value in payload.items() if key != "_owner_session_id"}
     for ws in list(_clients):
+        if owner_session_id is not None and _client_sessions.get(ws) != owner_session_id:
+            continue
         try:
-            await ws.send_json(payload)
+            await ws.send_json(public_payload)
         except Exception:
             dead.append(ws)
     for ws in dead:
         _clients.discard(ws)
+        _client_sessions.pop(ws, None)
 
 
 async def _broadcast(payload: Dict[str, Any]) -> None:
@@ -441,14 +455,10 @@ async def health() -> Dict[str, Any]:
     return {"status": "ok" if _cached_db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": _cached_db_status}
 
 
-@app.post("/ingest/json")
-async def ingest_json(
+async def _ingest_records(
     req: IngestJsonRequest,
-    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_demo_session_id: Optional[str],
 ) -> Dict[str, Any]:
-    """x_demo_session_id: the visitor's browser id (if any). None for genuine external
-    webhooks/n8n/CRM sources, whose data stays visible to everyone by design — see
-    store_kpi_metrics for the anonymous demo-isolation rationale."""
     # payload stored (truncated in store) so events can be inspected and replayed
     # — like store_kpi_metrics, these are synchronous DB calls, off the event loop.
     log_id = await asyncio.to_thread(
@@ -500,7 +510,12 @@ async def ingest_json(
     await asyncio.to_thread(update_ingestion_log, log_id, "completed", records=inserted)
 
     # Broadcast to local WebSockets
-    asyncio.create_task(_broadcast({"event": "ingest", "source": req.source, "records": enriched}))
+    asyncio.create_task(_broadcast({
+        "event": "ingest",
+        "source": req.source,
+        "records": enriched,
+        "_owner_session_id": x_demo_session_id,
+    }))
 
     # Dispatch Outbound Webhook to IntelAI or custom CRM
     asyncio.create_task(_dispatch_external_webhook(enriched))
@@ -508,27 +523,41 @@ async def ingest_json(
     return {"source": req.source, "records_in": len(req.records), "records_inserted": inserted, "log_id": log_id}
 
 
+@app.post("/ingest/json")
+async def ingest_json(
+    req: IngestJsonRequest,
+    request: Request,
+    x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+) -> Dict[str, Any]:
+    _require_ingestion_scope(request, x_demo_session_id)
+    return await _ingest_records(req, x_demo_session_id)
+
+
 @app.post("/ingest/csv")
 async def ingest_csv(
+    request: Request,
     file: UploadFile = File(...),
     source: str = Form("csv_upload"),
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
 ) -> Dict[str, Any]:
+    _require_ingestion_scope(request, x_demo_session_id)
     import csv
     import io
     content = await file.read()
     rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"))))
-    return await ingest_json(IngestJsonRequest(records=rows, source=source), x_demo_session_id=x_demo_session_id)
+    return await _ingest_records(IngestJsonRequest(records=rows, source=source), x_demo_session_id)
 
 
 @app.post("/ingest/email")
 async def ingest_email(
     payload: Dict[str, Any],
+    request: Request,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
 ) -> Dict[str, Any]:
     """Accept a Gmail-style payload and treat as a single record."""
+    _require_ingestion_scope(request, x_demo_session_id)
     records = [{"source": "email", "raw": payload, "metric": payload.get("subject", "")}]
-    return await ingest_json(IngestJsonRequest(records=records, source="email"), x_demo_session_id=x_demo_session_id)
+    return await _ingest_records(IngestJsonRequest(records=records, source="email"), x_demo_session_id)
 
 
 @app.post("/webhook/{source_name}")
@@ -545,9 +574,8 @@ async def webhook_generic(
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json")
     records = WebhookReceiver.parse_payload(payload, source_name)
-    # No X-Demo-Session-Id here on purpose: real external webhook callers aren't browsers,
-    # so their data stays globally visible — that's the point of a public ingestion demo.
-    return await ingest_json(IngestJsonRequest(records=list(records), source=source_name), x_demo_session_id=None)
+    # A valid HMAC authorizes this integration to write globally visible records.
+    return await _ingest_records(IngestJsonRequest(records=list(records), source=source_name), x_demo_session_id=None)
 
 
 @app.post("/webhook/{source_name}/with-vision")
@@ -592,7 +620,7 @@ async def webhook_with_vision(
                     except Exception as e:
                         log.warning("vision compose failed: %s", e)
                 enriched.append(dict(r))
-        return await ingest_json(IngestJsonRequest(records=enriched, source=source_name), x_demo_session_id=None)
+        return await _ingest_records(IngestJsonRequest(records=enriched, source=source_name), x_demo_session_id=None)
     except Exception as e:
         log.warning("with-vision processing failed: %s", e)
         raise HTTPException(status_code=400, detail="invalid_payload")
@@ -608,10 +636,14 @@ async def pipeline_status(
     admin_secret = os.getenv("ADMIN_TOKEN")
     is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
     effective_session = session_id or x_demo_session_id
+    if not is_admin and not effective_session:
+        raise HTTPException(status_code=401, detail="visitor_session_required")
+    if not is_admin and effective_session == "*":
+        raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
     target_session = "*" if is_admin else effective_session
     out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
     try:
-        out.update(store_stats(session_id=target_session, include_seed=(is_admin or include_seed)))
+        out.update(store_stats(session_id=target_session, include_seed=is_admin))
     except Exception as e:
         log.warning("store_stats failed: %s", e)
     return out
@@ -631,6 +663,10 @@ async def pipeline_replay(
     admin_secret = os.getenv("ADMIN_TOKEN")
     is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
     effective_session = session_id or x_demo_session_id
+    if not is_admin and not effective_session:
+        raise HTTPException(status_code=401, detail="visitor_session_required")
+    if not is_admin and effective_session == "*":
+        raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
     target_session = "*" if is_admin else effective_session
     row = get_ingestion_row(log_id, session_id=target_session, include_seed=is_admin)
     if not row:
@@ -641,7 +677,8 @@ async def pipeline_replay(
         records = None
     if not records:
         raise HTTPException(status_code=422, detail="no_stored_payload")
-    return await ingest_json(IngestJsonRequest(records=records, source=f"replay:{row['source']}"), x_demo_session_id=effective_session)
+    owner_session = None if is_admin and effective_session == "*" else effective_session
+    return await _ingest_records(IngestJsonRequest(records=records, source=f"replay:{row['source']}"), x_demo_session_id=owner_session)
 
 
 @app.get("/pipeline/history")
@@ -672,8 +709,16 @@ async def pipeline_history(
 
 @app.websocket("/live")
 async def ws_live(ws: WebSocket):
+    session_id = ws.query_params.get("session_id") or ws.headers.get("X-Demo-Session-Id")
+    if not session_id:
+        await ws.close(code=4401, reason="visitor_session_required")
+        return
+    if session_id == "*":
+        await ws.close(code=4403, reason="admin_required_for_unscoped_access")
+        return
     await ws.accept()
     _clients.add(ws)
+    _client_sessions[ws] = session_id
     try:
         import asyncio
         import json
@@ -687,7 +732,10 @@ async def ws_live(ws: WebSocket):
                 except Exception:
                     break
     except WebSocketDisconnect:
+        pass
+    finally:
         _clients.discard(ws)
+        _client_sessions.pop(ws, None)
 
 
 @app.get("/live/sse")
