@@ -693,8 +693,7 @@ async def pipeline_replay(
 ) -> Dict[str, Any]:
     """Re-ingest the stored payload of a past ingestion event (real replay). Ownership is
     enforced in get_ingestion_row: a log_id from a different visitor's session 404s instead
-    of replaying their stored payload — this used to be replayable by anyone who guessed a
-    sequential id, regardless of who ingested it."""
+    of replaying their stored payload."""
     admin_secret = os.getenv("ADMIN_TOKEN")
     is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
     effective_session = session_id or x_demo_session_id

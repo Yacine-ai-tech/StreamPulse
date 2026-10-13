@@ -209,7 +209,7 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
     """Encode `inputs` with a local sentence-transformers model (BGE by default).
     The model is loaded once per name and reused across calls.
     If INFERENCE_MODE is remote, calls the configured remote embedding host instead,
-    polling through a cold start (see _EMBED_WAKE_BUDGET_SECONDS above) rather than
+    polling while the host starts (see _EMBED_WAKE_BUDGET_SECONDS above) rather than
     giving up on the first one or two quick attempts."""
 
     if os.getenv("PYTEST_CURRENT_TEST") and settings.INFERENCE_MODE != "remote":
@@ -286,8 +286,8 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                         "Remote embedding: host still not ready after %.0fs (%d attempts). Last: %s",
                         _EMBED_WAKE_BUDGET_SECONDS, attempt, last_desc,
                     )
-                    # Do not fall back to local if remote never came up, to prevent OOM
-                    # in memory-constrained environments. Let the caller degrade instead.
+                    # Do not fall back to local when the remote host never came up: loading
+                    # the local model is memory-heavy. Let the caller degrade instead.
                     return []
                 log.info(
                     "Remote embedding: host still waking (attempt %d, %s) -- retrying in %.0fs "
