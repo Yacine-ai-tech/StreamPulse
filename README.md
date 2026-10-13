@@ -20,8 +20,9 @@ live dashboard, and first-class n8n integration.
 
 - **Six source types**: JSON, CSV, Gmail email, HMAC-verified webhooks, Google Sheets, and
   custom n8n integration.
-- **Hybrid, six-domain classifier**: a keyword fast path, an embedding fallback, and Claude
-  Haiku zero-shot classification as a last resort, with content-hash caching.
+- **Hybrid, six-domain classifier**: a keyword fast path, an embedding fallback, and zero-shot
+  LLM classification as a last resort (`LLM_JUDGE`, `groq/openai/gpt-oss-120b` by default,
+  with a Gemini failover), with content-hash caching.
 - **`/webhook/{source}/with-vision`**: composes with DocIntel's `/classify-image` for
   auction-listing and inventory aggregation.
 - **Live dashboard** via WebSocket (`/live`) or Server-Sent Events (`/live/sse`).
@@ -30,7 +31,7 @@ live dashboard, and first-class n8n integration.
 - **dlt declarative sources** for Gmail, Sheets, and webhook ingestion in
   `ingestion/dlt_sources.py`. `run_webhook_pipeline()` runs the webhook source through a real
   dlt pipeline with merge-based incremental loading, deduplicated by a content-hash primary
-  key — the one source needing no external OAuth credential, and the one with a runnable
+  key. It is the one source needing no external OAuth credential, and the one with a runnable
   end-to-end test (`tests/test_dlt_sources.py`, DuckDB destination by default; pass
   `destination="postgres"` for production). `gmail_source`/`gsheet_source` need a `token.json`
   this repo does not ship, and degrade to an empty generator without one.
@@ -73,7 +74,7 @@ uvicorn api:app --port 8004
    └──────┬───────┘               └──────────────────┘
           ▼
    ┌──────────────┐
-   │  Classifier  │ ← keyword → embeddings → Claude Haiku
+   │  Classifier  │ ← keyword → embeddings → LLM (LLM_JUDGE)
    │ (with cache) │
    └──────┬───────┘
           ▼
@@ -93,7 +94,7 @@ uvicorn api:app --port 8004
 # In n8n: Workflows → Import from File
 ls connectors/n8n/workflows/
 # auction_aggregator.json — multi-source auction-listing aggregator
-# invoice_intake.json     — Gmail attachment → DocIntel → StreamPulse pipeline
+# invoice_intake.json     — invoice attachment → DocIntel → StreamPulse pipeline
 # crm_sync.json           — Sheet/CRM → KPI stream synchronization
 # uptime_alert.json       — scheduled uptime check → email alert
 # master_trigger.json     — scheduled harness exercising the other workflows
@@ -101,7 +102,7 @@ ls connectors/n8n/workflows/
 
 ## Tests
 
-36 test functions across smoke, API, classifier, webhook, end-to-end, and exhaustive endpoint
+60+ test functions across smoke, API, classifier, webhook, end-to-end, and exhaustive endpoint
 coverage:
 
 ```bash

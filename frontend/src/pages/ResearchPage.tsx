@@ -83,7 +83,7 @@ export default function ResearchPage() {
                 <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono text-[10px]">Tier 3</span>
                 LLM Semantic Escalation
               </div>
-              <p>If vector confidence remains below threshold, the record escalates to a reasoning LLM (Claude Haiku / Gemini Flash), achieving 99.0% macro-F1 on ambiguous text.</p>
+              <p>If vector confidence remains below threshold, the record escalates to a reasoning LLM (the configured judge model, with Gemini Flash as failover), achieving 99.0% macro-F1 on ambiguous text in the benchmark described in BENCHMARK.md.</p>
             </div>
           </div>
         </div>
