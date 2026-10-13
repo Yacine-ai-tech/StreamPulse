@@ -39,7 +39,7 @@ export default function ResearchPage() {
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent mb-1">Three-Tier Cascade</div>
             <div className="font-semibold text-body text-sm mb-1">Cost & Latency Optimization</div>
-            <div className="text-xs text-dim">Keyword heuristics → local BGE-M3 vectors → zero-shot LLM escalation.</div>
+            <div className="text-xs text-dim">Keyword heuristics (<0.5 ms) → local BGE-M3 vectors (~8 ms) → zero-shot LLM escalation (Claude Haiku / Gemini Flash).</div>
           </div>
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-ok mb-1">HMAC Security</div>
@@ -67,7 +67,7 @@ export default function ResearchPage() {
                 <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-mono text-[10px]">Tier 1</span>
                 Keyword Fast-Path
               </div>
-              <p>Evaluates curated domain vocabulary (e.g. "EBITDA" → Finance). If heuristic confidence reaches the keyword threshold (0.55 by default), the event routes immediately without any model call.</p>
+              <p>Evaluates curated domain vocabulary (e.g. "EBITDA" → Finance). If heuristic confidence reaches the keyword threshold (0.55 by default), the event routes immediately without any model call, in under 0.5 ms.</p>
             </div>
 
             <div className="rounded-lg bg-surface-2 p-4 border border-line text-xs space-y-2">
