@@ -133,15 +133,19 @@ python3 eval/run_benchmarks.py --seed 42
 
 ## Anonymous Telemetry
 
-On startup, a background thread sends one HTTP POST, at most once per six hours per running
-instance: `{"service": "StreamPulse", "event": "startup", "instance_id": "<random
-identifier>"}` — no document content, filenames, extraction results, API keys, IP addresses,
-or configuration is included. The instance identifier is randomly generated, not derived from
-any hardware identifier, and persisted to `logs/.telemetry_instance_id`; delete that file to
-reset it. Destination defaults to `TELEMETRY_URL`, an adoption-tracking endpoint used to count
-distinct installs, the same way many open-source CLIs report anonymous install counts.
-`TELEMETRY_OPT_OUT=true` disables it outright, or `TELEMETRY_URL` can be repointed to a
-different collector or a local no-op.
+The service sends one small HTTP POST at process start: `{"service": "StreamPulse", "event": "startup",
+"version": "<release>", "instance_id": "<random identifier>"}`. The identifier is a random value
+persisted in the logs directory (delete `.telemetry_instance_id` to reset it); it is not derived
+from any hardware identifier. No documents, prompts, credentials, filenames or configuration are
+included, and a guard prevents more than one ping every 30 seconds per instance.
+The receiving endpoint sees the request's network metadata, as any HTTP server does.
+
+Behaviour of the destination setting:
+
+- `TELEMETRY_URL` not defined: the ping goes to the project's collector.
+- `TELEMETRY_URL` defined but empty: nothing is sent. (`.env.example` sets it to the project's collector.)
+- `TELEMETRY_URL=<your collector>`: the ping goes there instead.
+- `TELEMETRY_OPT_OUT=true` or `DO_NOT_TRACK=1`: nothing is sent, whatever the URL says.
 
 ## Support the project
 

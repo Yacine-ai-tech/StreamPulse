@@ -29,7 +29,7 @@ All participants agree to maintain professional, inclusive, and constructive com
 StreamPulse is licensed under the **GNU Affero General Public License v3.0 (AGPL-3.0)**.
 
 - **Open Source Contributions**: All code submissions are licensed under AGPL-3.0.
-- **Commercial & Enterprise Licensing**: For organizations requiring closed-source deployment, OEM redistribution, or exemption from AGPL-3.0 copyleft obligations, commercial licensing is provided via **OmniIntelOS**. See [`COMMERCIAL.md`](./COMMERCIAL.md) or contact `siddoyacinetech227@gmail.com`.
+- **Commercial & Enterprise Licensing**: For organizations requiring closed-source deployment, OEM redistribution, or exemption from AGPL-3.0 copyleft obligations, commercial licensing is provided via **OmniIntelOS**. See [`COMMERCIAL.md`](./COMMERCIAL.md) or contact `contact@ysiddo-ai-projects.app`.
 
 ---
 
@@ -117,4 +117,4 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 
 ## 🔒 Security & Vulnerability Disclosure
 
-Email `siddoyacinetech227@gmail.com` to report security vulnerabilities privately.
+Email `contact@ysiddo-ai-projects.app` to report security vulnerabilities privately.
