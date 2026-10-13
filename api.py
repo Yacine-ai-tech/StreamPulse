@@ -586,7 +586,11 @@ async def webhook_with_vision(
 ) -> Dict[str, Any]:
     """Compose StreamPulse with DocIntel /classify-image for image-bearing webhooks."""
     body = await request.body()
-    if not WebhookReceiver.verify_signature(body, x_signature_256 or ""):
+    # Trusted internal callers (for example the n8n automation service, which holds
+    # the internal token as a managed credential rather than the signing secret)
+    # may authenticate with the internal token instead of an HMAC signature.
+    if not (_has_valid_internal_token(request)
+            or WebhookReceiver.verify_signature(body, x_signature_256 or "")):
         raise HTTPException(status_code=401, detail="invalid_signature")
     try:
         payload = json.loads(body or b"{}")
