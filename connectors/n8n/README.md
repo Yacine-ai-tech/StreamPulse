@@ -28,3 +28,12 @@ the node parameters directly in the n8n UI (or in the JSON before importing).
 Default: `POST http://your-host:8004/webhook/{source_name}`
 
 Include header: `X-Signature-256: sha256=<HMAC of body using WEBHOOK_SECRET>`
+
+## Authentication
+
+The workflow templates authenticate to StreamPulse with a named n8n credential,
+not an environment variable, so they keep working on instances that block
+`$env` access. After importing a template, create an **HTTP Header Auth**
+credential named `StreamPulse Internal Token` with header name `X-Internal-Token`
+and the value of your deployment's `INTERNAL_TOKEN`, then select it on the
+HTTP Request nodes.

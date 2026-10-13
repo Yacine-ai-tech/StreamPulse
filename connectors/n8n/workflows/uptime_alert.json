@@ -2,25 +2,46 @@
   "name": "Uptime Alerting & Notification",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 10 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
+        }
+      },
       "name": "Schedule Trigger",
       "type": "n8n-nodes-base.scheduleTrigger",
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
         "url": "http://localhost:8000/api/uptime/status",
         "sendHeaders": true,
         "headerParameters": {
-          "parameters": [
-            { "name": "Authorization", "value": "Bearer {{$env.INTERNAL_TOKEN}}" }
-          ]
+          "parameters": []
         },
-        "options": {}
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
       },
       "name": "Check KV Uptime Status",
       "type": "n8n-nodes-base.httpRequest",
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "StreamPulse Internal Token"
+        }
+      }
     },
     {
       "parameters": {
@@ -28,7 +49,10 @@
       },
       "name": "Filter DOWN Services",
       "type": "n8n-nodes-base.code",
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -39,13 +63,42 @@
       },
       "name": "Send Alert Email",
       "type": "n8n-nodes-base.emailSend",
-      "position": [850, 300]
+      "position": [
+        850,
+        300
+      ]
     }
   ],
   "connections": {
-    "Schedule Trigger": { "main": [[{"node": "Check KV Uptime Status"}]] },
-    "Check KV Uptime Status": { "main": [[{"node": "Filter DOWN Services"}]] },
-    "Filter DOWN Services": { "main": [[{"node": "Send Alert Email"}]] }
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Check KV Uptime Status"
+          }
+        ]
+      ]
+    },
+    "Check KV Uptime Status": {
+      "main": [
+        [
+          {
+            "node": "Filter DOWN Services"
+          }
+        ]
+      ]
+    },
+    "Filter DOWN Services": {
+      "main": [
+        [
+          {
+            "node": "Send Alert Email"
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "executionOrder": "v1" }
+  "settings": {
+    "executionOrder": "v1"
+  }
 }
