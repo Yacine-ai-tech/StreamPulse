@@ -33,26 +33,24 @@ measured justification for the hybrid design.
   Tier 2 answer is worse than deferring to a stronger tier. That tradeoff is reflected in the
   Tier-2-only row above (0.646) — most of the gap between it and the full-hybrid row is exactly
   those deferred, harder examples being correctly resolved by Tier 3 instead of guessed by Tier 2.
-- The embedding tier calls a remote inference host over HTTP rather than loading the model
-  in-process; it's built to poll through on-demand backend cold-boot overhead rather than fail
-  on it, so its measured contribution here reflects genuine classification quality, not host
-  wake-up latency. First-request latency reflects that cold-boot overhead, not classifier
-  inefficiency.
+- The embedding tier can run in-process or call a remote embedding host (`INFERENCE_MODE`).
+  When the host starts on demand, the first request includes its start-up time, which is not a
+  property of the classifier; the accuracy figures here are not affected by it.
 - The LLM tier was evaluated with an OpenAI-compatible chat model via LiteLLM; any of the
   supported providers (see `LLM_JUDGE`) can be swapped in without code changes.
 
-## Update — Expanded Domain Pack ($N=504$ Telemetry Suite)
+## Update — Expanded Domain Pack (N = 504 telemetry suite)
 
 Reproducible: `python eval/generate_classifier_dataset.py` then `python eval/run_classifier_benchmark.py --dataset eval/domain_labeled_500.jsonl --samples 504`.
 
 The reference domain pack (`domain_packs/demo_business.json`) was expanded to 110 prototype phrases across all 6 business domains (15–18 prototypes per domain), broadening Tier 2 vector coverage.
 
-| Metric | Baseline ($N=500$) | Expanded Domain Pack ($N=504$) |
+| Metric | Baseline (N = 500) | Expanded Domain Pack (N = 504) |
 |---|---|---|
 | **Accuracy** | 97.6% | **99.0%** |
 | **Macro-F1** | 0.976 | **0.990** |
 
-**Per-Domain F1 Breakdown ($N=504$):**
+**Per-Domain F1 Breakdown (N = 504):**
 - **ESG**: 1.00
 - **IT_Ops**: 1.00
 - **Operations**: 1.00
@@ -61,4 +59,4 @@ The reference domain pack (`domain_packs/demo_business.json`) was expanded to 11
 - **Growth**: 0.97
 
 **Infrastructure Architecture:**
-The embedding tier executes locally in-process via `BAAI/bge-m3` (`INFERENCE_MODE=local`), providing sub-millisecond semantic classification without external network latency.
+For this run the embedding tier executed in-process with `BAAI/bge-m3` (`INFERENCE_MODE=local`), so no network call was involved in Tier 2.
