@@ -39,3 +39,13 @@ def test_deduplicate():
     r = lambda: DataRecord("webhook", "Finance", "revenue", 1.0, "2026-01-01", {})
     out = DataValidator.deduplicate([r(), r()])
     assert len(out) == 1
+
+
+def test_completion_import_is_lock_guarded_and_concurrent_safe():
+    import concurrent.futures as cf
+    from pipeline import classifier
+
+    with cf.ThreadPoolExecutor(8) as ex:
+        results = list(ex.map(lambda _: classifier._get_completion(), range(16)))
+    assert all(callable(r) for r in results)
+    assert len({id(r) for r in results}) == 1
