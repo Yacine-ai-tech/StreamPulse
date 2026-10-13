@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import threading
 import time
 from dataclasses import dataclass
 from datetime import datetime
@@ -295,13 +296,43 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
                 )
                 time.sleep(min(_EMBED_POLL_DELAY_SECONDS, max(remaining, 0)))
 
-    from sentence_transformers import SentenceTransformer
+    embedder = _local_embedder(model)
+    return embedder.encode(inputs).tolist()
 
+
+_import_lock = threading.Lock()
+
+
+def _local_embedder(model: str):
+    """Load (once) and return the local sentence-transformers model. Guarded by a lock so
+    concurrent first requests do not each import the library and load the weights."""
     embedder = _embedder_cache.get(model)
     if embedder is None:
-        embedder = SentenceTransformer(model)
-        _embedder_cache[model] = embedder
-    return embedder.encode(inputs).tolist()
+        with _import_lock:
+            embedder = _embedder_cache.get(model)
+            if embedder is None:
+                from sentence_transformers import SentenceTransformer
+                embedder = SentenceTransformer(model)
+                _embedder_cache[model] = embedder
+    return embedder
+
+
+def _get_completion():
+    """litellm's `completion`, imported under a lock: a first import from several worker
+    threads at once deadlocks inside the interpreter's import machinery."""
+    with _import_lock:
+        from litellm import completion
+    return completion
+
+
+def warm_up() -> None:
+    """Pre-load the heavy dependencies so the first real request does not pay for them."""
+    try:
+        _get_completion()
+        if getattr(settings, "INFERENCE_MODE", "local") != "remote":
+            _local_embedder(settings.STREAMPULSE_EMBED_MODEL)
+    except Exception as exc:  # warm-up is best effort
+        log.warning("classifier warm-up skipped: %s", exc)
 
 # ════════════════════════════════════════════════════════════════════════════
 # CLASSIFICATION CACHE (Content Hash Caching)
@@ -887,7 +918,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                      "invalid_api_key", "invalid api key")
 
     def _call(model: str):
-        from litellm import completion
+        completion = _get_completion()
         from core import keypool
         resp = keypool.completion_pooled(
             completion,
