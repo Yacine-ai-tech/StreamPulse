@@ -409,12 +409,13 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
         "data": records
     }
 
-    # Pass along the internal mesh token if targeting another internal microservice
+    # The destination is operator-configured and may be a third party, so this service's
+    # own internal token is never attached. A dedicated token is sent only when set.
     import os
-    headers = {
-        "Content-Type": "application/json",
-        "X-Internal-Token": os.environ.get("INTERNAL_TOKEN", "")
-    }
+    headers = {"Content-Type": "application/json"}
+    destination_token = os.environ.get("EXTERNAL_WEBHOOK_TOKEN", "").strip()
+    if destination_token:
+        headers["Authorization"] = f"Bearer {destination_token}"
 
     try:
         async with httpx.AsyncClient(timeout=10) as client:
@@ -611,13 +612,13 @@ async def webhook_with_vision(
                         img_bytes = (await client.get(img_url)).content
                         files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
                         data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
-                        # Send the shared internal token if this deployment sets one — DocIntel's
+                        # Send DocIntel's own token if this deployment sets one — DocIntel's
                         # own internal-token gate exempts /classify-image, but the header costs
                         # nothing when unset and keeps this working if that exemption ever changes.
                         vision_headers = {}
-                        internal_token = _os.environ.get("INTERNAL_TOKEN", "")
-                        if internal_token:
-                            vision_headers["X-Internal-Token"] = internal_token
+                        docintel_token = _os.environ.get("DOCINTEL_INTERNAL_TOKEN", "").strip()
+                        if docintel_token:
+                            vision_headers["X-DocIntel-Internal-Token"] = docintel_token
                         resp = await client.post(f"{settings.DOCINTEL_URL}/classify-image", files=files, data=data, headers=vision_headers)
                         r["image_category"] = resp.json().get("category")
                         r["image_confidence"] = resp.json().get("confidence")
