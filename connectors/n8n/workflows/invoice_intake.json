@@ -1,5 +1,5 @@
 {
-  "name": "Enterprise Invoice Intake (Gmail \u2192 DocIntel \u2192 ClickUp \u2192 StreamPulse)",
+  "name": "Enterprise Invoice Intake (Gmail → DocIntel → ClickUp → StreamPulse)",
   "nodes": [
     {
       "parameters": {
@@ -34,18 +34,22 @@
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
-        "options": {
-          "headers": {
-            "X-Internal-Token": "={{$env.INTERNAL_TOKEN}}"
-          }
-        }
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
       },
       "name": "DocIntel Vision OCR",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
         -180,
         0
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "StreamPulse Internal Token"
+        }
+      }
     },
     {
       "parameters": {
@@ -96,18 +100,22 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "={{ JSON.stringify({records: [$node[\"DocIntel Vision OCR\"].json]}) }}",
-        "options": {
-          "headers": {
-            "X-Internal-Token": "={{$env.INTERNAL_TOKEN}}"
-          }
-        }
+        "options": {},
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth"
       },
       "name": "StreamPulse Ingest",
       "type": "n8n-nodes-base.httpRequest",
       "position": [
         260,
         100
-      ]
+      ],
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "",
+          "name": "StreamPulse Internal Token"
+        }
+      }
     }
   ],
   "connections": {
