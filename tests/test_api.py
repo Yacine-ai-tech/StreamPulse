@@ -231,3 +231,23 @@ def test_live_websocket_requires_demo_session():
             pass
 
     assert disconnected.value.code == 4401
+
+
+def test_vision_webhook_accepts_internal_token_or_signature(monkeypatch):
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "true")
+    monkeypatch.setenv("INTERNAL_TOKEN", "test-secret-token")
+    client = _client()
+    body = b"{}"
+
+    # Wrong token never reaches the route (global middleware).
+    assert client.post("/webhook/demo/with-vision", content=body,
+                       headers={"X-Internal-Token": "wrong"}).status_code == 403
+
+    # A valid internal token passes authentication without any signature.
+    ok = client.post("/webhook/demo/with-vision", content=body,
+                     headers={"X-OmniIntel-Internal-Token": "test-secret-token"})
+    assert ok.status_code not in (401, 403)
+
+    # With the middleware relaxed, an unsigned request without a token is refused by the route.
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "false")
+    assert client.post("/webhook/demo/with-vision", content=body).status_code == 401
