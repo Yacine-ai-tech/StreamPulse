@@ -273,3 +273,36 @@ def test_downstream_calls_never_carry_this_services_own_token(monkeypatch):
     assert 'vision_headers["X-Internal-Token"]' not in src
     assert '"X-Internal-Token": os.environ.get("INTERNAL_TOKEN"' not in src
     assert "DOCINTEL_INTERNAL_TOKEN" in src and "EXTERNAL_WEBHOOK_TOKEN" in src
+
+
+def test_ingest_response_reports_classification(client=None):
+    from fastapi.testclient import TestClient
+    import api as api_mod
+
+    c = TestClient(api_mod.app)
+    headers = {"X-Demo-Session-Id": "audit-classification-session"}
+    r = c.post("/ingest/json", json={"source": "audit", "records": [
+        {"metric": "Revenue", "value": 12.5, "unit": "USD"},
+    ]}, headers=headers)
+    assert r.status_code == 200, r.text
+    body = r.json()
+    assert body["records_in"] == 1
+    assert body["classification"]["by_domain"], body
+    assert len(body["classification"]["records"]) == 1
+
+
+def test_analytics_summary_uses_primary_store_when_engine_disabled(monkeypatch):
+    from fastapi.testclient import TestClient
+    import api as api_mod
+
+    monkeypatch.setattr(api_mod.settings, "ENABLE_DUCKDB", False, raising=False)
+    c = TestClient(api_mod.app)
+    headers = {"X-Demo-Session-Id": "audit-analytics-session"}
+    c.post("/ingest/json", json={"source": "audit", "records": [
+        {"metric": "Headcount", "value": 41, "unit": "people"},
+    ]}, headers=headers)
+    r = c.get("/analytics/domain-summary?days=7", headers=headers)
+    assert r.status_code == 200
+    body = r.json()
+    assert body["engine"] == "primary_store"
+    assert body["count"] >= 1 and body["data"][0]["record_count"] >= 1

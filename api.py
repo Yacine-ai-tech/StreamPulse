@@ -28,6 +28,7 @@ from core.logger import get_logger
 from connectors.webhook_receiver import WebhookReceiver
 from store import (
     get_ingestion_row,
+    get_kpi_metrics,
     get_pipeline_history,
     init_db,
     log_data_ingestion,
@@ -520,7 +521,20 @@ async def _ingest_records(
     # Dispatch Outbound Webhook to IntelAI or custom CRM
     asyncio.create_task(_dispatch_external_webhook(enriched))
 
-    return {"source": req.source, "records_in": len(req.records), "records_inserted": inserted, "log_id": log_id}
+    by_domain: Dict[str, int] = {}
+    for rec in enriched:
+        d = str(rec.get("domain") or "General")
+        by_domain[d] = by_domain.get(d, 0) + 1
+    return {
+        "source": req.source, "records_in": len(req.records), "records_inserted": inserted, "log_id": log_id,
+        "classification": {
+            "by_domain": by_domain,
+            "records": [
+                {"domain": r.get("domain"), "confidence": r.get("confidence"), "method": r.get("method")}
+                for r in enriched[:100]
+            ],
+        },
+    }
 
 
 @app.post("/ingest/json")
@@ -810,6 +824,46 @@ async def get_storage_stats() -> Dict[str, Any]:
     
     return stats
 
+def _store_summary(days: int, session_id: Optional[str]) -> Dict[str, Any]:
+    """Domain summary and daily trend computed straight from the primary store. Used when
+    the DuckDB analytics engine is disabled, so the endpoints return real, session-scoped
+    numbers instead of an empty list."""
+    from datetime import datetime, timedelta, timezone
+    cutoff = datetime.now(timezone.utc) - timedelta(days=days)
+    rows = get_kpi_metrics(limit=5000, session_id=session_id, include_seed=True)
+    by_domain: Dict[str, Dict[str, Any]] = {}
+    by_day: Dict[str, Dict[str, Any]] = {}
+    for r in rows:
+        try:
+            ts = datetime.fromisoformat(str(r.get("created_at")).replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if ts < cutoff:
+            continue
+        conf = r.get("confidence")
+        d = by_domain.setdefault(str(r.get("category")), {"n": 0, "conf": 0.0, "cn": 0, "sources": set()})
+        d["n"] += 1
+        d["sources"].add(r.get("source"))
+        day = by_day.setdefault(ts.date().isoformat(), {"n": 0, "conf": 0.0, "cn": 0})
+        day["n"] += 1
+        if isinstance(conf, (int, float)):
+            d["conf"] += conf
+            d["cn"] += 1
+            day["conf"] += conf
+            day["cn"] += 1
+    domains = [
+        {"domain": k, "record_count": v["n"], "avg_confidence": (v["conf"] / v["cn"]) if v["cn"] else None,
+         "classification_method": "stored", "source_count": len(v["sources"])}
+        for k, v in sorted(by_domain.items())
+    ]
+    trends = [
+        {"classification_date": k, "classification_method": "stored", "total_classifications": v["n"],
+         "avg_confidence": (v["conf"] / v["cn"]) if v["cn"] else None}
+        for k, v in sorted(by_day.items(), reverse=True)
+    ]
+    return {"domains": domains, "trends": trends}
+
+
 @app.get("/analytics/domain-summary")
 async def get_domain_summary(
     days: int = 7,
@@ -819,6 +873,10 @@ async def get_domain_summary(
     /pipeline/history etc. are -- see x_demo_session_id's docstring there."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
+
+    if not settings.ENABLE_DUCKDB:
+        data = (await asyncio.to_thread(_store_summary, days, x_demo_session_id))["domains"]
+        return {"data": data, "count": len(data), "period_days": days, "engine": "primary_store"}
 
     try:
         from storage import get_analytics_engine
@@ -841,6 +899,10 @@ async def get_classification_trends(
     """Get classification method trends over time. See get_domain_summary for scoping."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
+
+    if not settings.ENABLE_DUCKDB:
+        data = (await asyncio.to_thread(_store_summary, days, x_demo_session_id))["trends"]
+        return {"data": data, "count": len(data), "period_days": days, "engine": "primary_store"}
 
     try:
         from storage import get_analytics_engine
