@@ -653,6 +653,23 @@ async def pipeline_status(
     return out
 
 
+@app.get("/internal/pipeline/status")
+async def internal_pipeline_status(request: Request) -> Dict[str, Any]:
+    """Aggregate pipeline statistics for trusted automation (for example n8n alerting).
+
+    Visitor-facing ``/pipeline/status`` stays session-scoped; this route is reachable
+    only with a valid internal service token and returns counters, never records.
+    """
+    if not _has_valid_internal_token(request):
+        raise HTTPException(status_code=403, detail="internal_token_required")
+    out: Dict[str, Any] = {"status": "ok", "connected_clients": len(_clients)}
+    try:
+        out.update(store_stats(session_id="*", include_seed=False))
+    except Exception as e:
+        log.warning("store_stats failed: %s", e)
+    return out
+
+
 @app.post("/pipeline/replay/{log_id}")
 async def pipeline_replay(
     log_id: int,

@@ -251,3 +251,15 @@ def test_vision_webhook_accepts_internal_token_or_signature(monkeypatch):
     # With the middleware relaxed, an unsigned request without a token is refused by the route.
     monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "false")
     assert client.post("/webhook/demo/with-vision", content=body).status_code == 401
+
+
+def test_internal_pipeline_status_requires_internal_token(monkeypatch):
+    monkeypatch.setenv("REQUIRE_INTERNAL_TOKEN", "false")
+    monkeypatch.setenv("INTERNAL_TOKEN", "test-secret-token")
+    client = _client()
+    assert client.get("/internal/pipeline/status").status_code == 403
+    assert client.get("/internal/pipeline/status",
+                      headers={"X-Internal-Token": "wrong"}).status_code == 403
+    ok = client.get("/internal/pipeline/status",
+                    headers={"X-Internal-Token": "test-secret-token"})
+    assert ok.status_code == 200 and ok.json()["status"] == "ok"
