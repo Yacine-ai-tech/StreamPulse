@@ -93,7 +93,7 @@ def _send_telemetry():
     if os.environ.get("TELEMETRY_OPT_OUT", "").strip().lower() in ("1", "true", "yes") or os.environ.get("DO_NOT_TRACK", "").strip() == "1":
         return
 
-    telemetry_url = os.environ.get("TELEMETRY_URL", DEFAULT_TELEMETRY_URL).strip()
+    telemetry_url = (os.environ.get("TELEMETRY_URL") or DEFAULT_TELEMETRY_URL).strip()
     if not telemetry_url:
         return
 
@@ -106,20 +106,19 @@ def _send_telemetry():
     except Exception:
         pass
 
-    try:
-        log.info("Anonymous telemetry ping to %s (set TELEMETRY_OPT_OUT=true to disable).", telemetry_url)
-        httpx.post(
-            telemetry_url,
-            json={
-                "service": "StreamPulse",
-                "event": "startup",
-                "version": app.version,
-                "instance_id": _telemetry_instance_id(),
-            },
-            timeout=2,
-        )
-    except Exception:
-        pass
+    log.info("Anonymous telemetry ping to %s (set TELEMETRY_OPT_OUT=true to disable).", telemetry_url)
+    payload = {
+        "service": "StreamPulse",
+        "event": "startup",
+        "version": app.version,
+        "instance_id": _telemetry_instance_id(),
+    }
+    for attempt in range(3):
+        try:
+            httpx.post(telemetry_url, json=payload, timeout=3)
+            break
+        except Exception:
+            time.sleep(2 * (attempt + 1))
 
 
 threading.Thread(target=_send_telemetry, daemon=True).start()
