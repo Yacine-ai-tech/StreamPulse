@@ -263,3 +263,13 @@ def test_internal_pipeline_status_requires_internal_token(monkeypatch):
     ok = client.get("/internal/pipeline/status",
                     headers={"X-Internal-Token": "test-secret-token"})
     assert ok.status_code == 200 and ok.json()["status"] == "ok"
+
+
+def test_downstream_calls_never_carry_this_services_own_token(monkeypatch):
+    import inspect
+    import api
+    src = inspect.getsource(api)
+    # Neither outgoing path may read the service's own INTERNAL_TOKEN to forward it.
+    assert 'vision_headers["X-Internal-Token"]' not in src
+    assert '"X-Internal-Token": os.environ.get("INTERNAL_TOKEN"' not in src
+    assert "DOCINTEL_INTERNAL_TOKEN" in src and "EXTERNAL_WEBHOOK_TOKEN" in src
