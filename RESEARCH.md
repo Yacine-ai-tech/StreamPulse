@@ -44,7 +44,7 @@ The core classification logic resides in `pipeline/classifier.py`.
 
 1. **Tier 1 (Keyword).** A high-speed heuristic check for domain-specific vocabulary (for
    example, "revenue" implying Finance). If confidence exceeds `CLASSIFIER_KEYWORD_THRESHOLD`
-   (default 0.7), the pipeline returns immediately.
+   (default 0.55), the pipeline returns immediately.
 2. **Tier 2 (Vector embedding).** If keywords fail, the text is embedded using a local model
    (BAAI/bge-m3) and compared against domain prototypes by cosine similarity. If the score
    exceeds `CLASSIFIER_EMBEDDING_THRESHOLD`, the label is assigned. The taxonomy is not
@@ -53,7 +53,8 @@ The core classification logic resides in `pipeline/classifier.py`.
    classifier applicable to any domain taxonomy, not only the business-function set used for
    evaluation here.
 3. **Tier 3 (LLM escalation).** As a last resort, the record is sent to a high-capability LLM
-   (Claude Haiku or Gemini) for zero-shot classification.
+   (configured with `LLM_JUDGE`; Groq `gpt-oss-120b` by default, Gemini as failover) for
+   zero-shot classification.
 
 ### 2.2 Content Hash Caching
 
