@@ -122,15 +122,14 @@ load-tested concurrently against the same corpus, then the second instance was d
 
 Both instances were measured simultaneously under real, independent load — not summed from
 two separate isolated runs — reflecting genuine concurrent two-node capacity, including
-whatever cross-instance variance real infrastructure introduces. The combined figure is
-roughly double the best single-instance measurement, consistent with near-linear scaling
-across independent nodes for this workload shape.
+whatever cross-instance variance real infrastructure introduces. The two instances differed
+widely (28.4 and 60.7 req/s), so the combined figure shows that capacity adds across nodes for
+this workload shape but is too coarse a measurement to establish linear scaling.
 
 **Design target: ≥480 req/s sustained throughput.** Two-instance combined capacity measures
-89.1 req/s. Extrapolating the near-linear scaling observed above, reaching the design target
-is a matter of adding further instances of this class behind a load balancer — roughly five
-to six total nodes — rather than further single-instance tuning; see Future Directions in
-[`RESEARCH.md`](RESEARCH.md).
+89.1 req/s, about 45 req/s per instance. If capacity keeps adding across instances, reaching the
+design target would take roughly eleven instances of this class behind a load balancer; that
+extrapolation has not been measured. See Future Directions in [`RESEARCH.md`](RESEARCH.md).
 
 ---
 
