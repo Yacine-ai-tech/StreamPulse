@@ -159,4 +159,4 @@ two separate, complementary measurements.
 - [`eval/CLASSIFIER_BENCHMARK.md`](eval/CLASSIFIER_BENCHMARK.md) — classifier methodology and limitations
 - [`eval/THROUGHPUT_BENCHMARK.md`](eval/THROUGHPUT_BENCHMARK.md) — throughput stress-test detail
 - [`eval/WEBHOOK_BENCHMARK.md`](eval/WEBHOOK_BENCHMARK.md) — HMAC security validation detail
-- [`RESEARCH.md`](RESEARCH.md) — literature context, cascade design rationale, and an honest assessment of novelty
+- [`RESEARCH.md`](RESEARCH.md) — literature context, cascade design rationale, and an assessment of novelty

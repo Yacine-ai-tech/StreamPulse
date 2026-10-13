@@ -154,7 +154,7 @@ ingestion server, bridging standard data engineering (FastAPI, Postgres, Kafka) 
    increase in statistical breadth, not yet a measurement of real-world field accuracy.
 3. **Single-instance throughput ceiling.** The ingestion-isolated sustained-throughput
    measurement in §3.2 (46.8 req/s, up from 1.7 req/s across five fixes) is bound by a single
-   instance's compute — an honest measurement of that specific deployment shape, not a ceiling
+   instance's compute — a measurement of that specific deployment shape, not a ceiling
    on the architecture itself. The documented ≥480 req/s target was not reached and, per the
    arithmetic in §3.2, cannot be reached without horizontal scaling to multiple instances.
 
