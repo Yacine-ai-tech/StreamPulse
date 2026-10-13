@@ -847,8 +847,10 @@ def _store_summary(days: int, session_id: Optional[str]) -> Dict[str, Any]:
         day = by_day.setdefault(ts.date().isoformat(), {"n": 0, "conf": 0.0, "cn": 0})
         day["n"] += 1
         if isinstance(conf, (int, float)):
-            d["conf"] += conf; d["cn"] += 1
-            day["conf"] += conf; day["cn"] += 1
+            d["conf"] += conf
+            d["cn"] += 1
+            day["conf"] += conf
+            day["cn"] += 1
     domains = [
         {"domain": k, "record_count": v["n"], "avg_confidence": (v["conf"] / v["cn"]) if v["cn"] else None,
          "classification_method": "stored", "source_count": len(v["sources"])}
