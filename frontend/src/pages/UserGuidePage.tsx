@@ -169,7 +169,7 @@ export default function UserGuidePage() {
               cascade (embedding and LLM tiers on every payload) the single-process figures were 1.7 req/s and 29 s
               average latency; on keyword-tier payloads with pooled connections and one worker per vCPU the same
               host sustained 46.8 req/s at 4.0 s average. The numbers describe one host and one payload shape, not a
-              capacity guarantee; see the source file for the setup and limitations.
+              capacity guarantee; see the source file for the setup and limitations. An earlier instantaneous 1,000-request burst against a single free-tier instance had measured 22 req/s peak, 1,912 ms average and 10,358 ms P95 response time with every request failing under that overload, which is why the numbers above were re-measured on the current host.
             </p>
           </div>
         </section>
