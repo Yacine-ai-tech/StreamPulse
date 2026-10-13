@@ -888,8 +888,10 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
 
     def _call(model: str):
         from litellm import completion
-        resp = completion(
-            model=model,
+        from core import keypool
+        resp = keypool.completion_pooled(
+            completion,
+            model,
             messages=[
                 {"role": "system", "content": f"Classify the following document into exactly one label from {labels}. Reply with ONLY the label."},
                 {"role": "user", "content": f"<document>\n{content[:1200]}\n</document>"}
