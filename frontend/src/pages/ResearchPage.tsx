@@ -39,7 +39,7 @@ export default function ResearchPage() {
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent mb-1">Three-Tier Cascade</div>
             <div className="font-semibold text-body text-sm mb-1">Cost & Latency Optimization</div>
-            <div className="text-xs text-dim">Keyword heuristics (<0.5 ms) → local BGE-M3 vectors (~8 ms) → zero-shot LLM escalation (Claude Haiku / Gemini Flash).</div>
+            <div className="text-xs text-dim">Keyword heuristics (&lt;0.5 ms) → local BGE-M3 vectors (~8 ms) → zero-shot LLM escalation (Claude Haiku / Gemini Flash).</div>
           </div>
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-ok mb-1">HMAC Security</div>
