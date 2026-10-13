@@ -21,11 +21,14 @@ the node parameters directly in the n8n UI (or in the JSON before importing).
 
 ## Custom Node
 
-`n8n_node.json` defines the **StreamPulse Webhook** node — a one-step way to push records into StreamPulse with the correct HMAC signature.
+`n8n_node.json` is a property schema that describes the fields a StreamPulse ingest step needs
+(method, URL, body parameters). It is a reference for building a node, not an installable n8n
+community node: in n8n, push records with an **HTTP Request** node as shown in the workflow
+templates.
 
 ## Webhook URL
 
-Default: `POST http://your-host:8004/webhook/{source_name}`
+Default: `POST http://<your-host>:<port>/webhook/{source_name}`
 
 Include header: `X-Signature-256: sha256=<HMAC of body using WEBHOOK_SECRET>`
 

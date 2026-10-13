@@ -21,13 +21,13 @@ Raw data streams don't arrive pre-labelled. An n8n node pushing `{ "value": 2340
 Incoming text/record
        │
   [TIER 1] Keyword matching — fast regex, microseconds
-       │ conf >= 0.5? → DONE (method: "keyword")
+       │ conf >= CLASSIFIER_KEYWORD_THRESHOLD (0.55)? → DONE (method: "keyword")
        │
   [TIER 2] Vector embedding similarity — BGE-m3
        │ cosine vs the configured domain pack's prototypes
        │ score >= CLASSIFIER_EMBEDDING_THRESHOLD? → DONE (method: "vector_embedding")
        │
-  [TIER 3] LLM zero-shot (opt-in: STREAMPULSE_HYBRID_LLM=1)
+  [TIER 3] LLM zero-shot (enabled by default: STREAMPULSE_HYBRID_LLM=1)
        │ Claude Haiku / Gemini Flash
        └── DONE (method: "llm")
 ```
@@ -71,9 +71,9 @@ and caveats: [eval/CLASSIFIER_BENCHMARK.md](../eval/CLASSIFIER_BENCHMARK.md).
 
 ## Novelty
 
-1. **Cost-optimised by default** — LLM escalation is opt-in; ~92% of real streams are handled by Tier 1 at zero cost.
+1. **Cost-aware escalation** — the LLM is only called when the keyword and embedding tiers are not confident, so records with explicit domain vocabulary cost nothing beyond the regex pass.
 2. **Transparent method attribution** — every record carries its `method` field, making classification auditable.
-3. **Model-agnostic** — Tiers 2 & 3 use the inference adapter (any remote host you configure / Cohere / Jina / local).
+3. **Model-agnostic** — Tier 2 uses a local embedding model or a remote embedding host you configure (`INFERENCE_MODE`); Tier 3 goes through LiteLLM, so any supported provider can be used.
 4. **Graceful degradation** — every tier has try/except fallback; the pipeline never blocks on classifier failure.
 5. **Configurable domains** — swap the whole taxonomy via a domain pack (`domain_packs/`,
    `STREAMPULSE_DOMAIN_PACK`) without touching code.
@@ -85,6 +85,7 @@ and caveats: [eval/CLASSIFIER_BENCHMARK.md](../eval/CLASSIFIER_BENCHMARK.md).
 | Env var | Default | Effect |
 |---------|---------|--------|
 | `STREAMPULSE_HYBRID_LLM` | `1` | Set to `0` to disable Tiers 2 & 3 (keyword-only) |
+| `INFERENCE_MODE` | `remote` | `local` loads the embedding model in-process; `remote` calls the configured embedding host |
 | `STREAMPULSE_EMBED_MODEL` | `BAAI/bge-m3` | Embedding model for Tier 2 |
 | `STREAMPULSE_DOMAIN_PACK` | bundled demo pack | Path to a custom domain-pack JSON (see `domain_packs/README.md`) |
 | `CLASSIFIER_EMBEDDING_THRESHOLD` | `0.65` | Minimum Tier 2 similarity to commit rather than defer to Tier 3 |
