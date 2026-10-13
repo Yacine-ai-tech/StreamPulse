@@ -81,8 +81,8 @@ export default function UserGuidePage() {
             bundled 6-domain reference pack (Finance, Growth, Operations, People, ESG, IT_Ops).
           </p>
           <ol className="space-y-3 text-sm text-gray-300 list-decimal list-inside mb-4">
-            <li><span className="font-semibold text-gray-100">Tier 1 — Keyword matching.</span> Scores text against per-domain keyword lists from the configured domain pack. Returns immediately once confidence ≥ 0.7. Free, near-instant.</li>
-            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Opt-in via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and compares it against the domain pack's prototype sentences by cosine similarity, committing only above <code>CLASSIFIER_EMBEDDING_THRESHOLD</code> (default 0.65 — calibrated to favor precision, deferring uncertain cases to Tier 3 rather than risk a confident wrong answer).</li>
+            <li><span className="font-semibold text-gray-100">Tier 1 — Keyword matching.</span> Scores text against per-domain keyword lists from the configured domain pack. Returns immediately once confidence reaches the keyword threshold (0.55 by default). No model call.</li>
+            <li><span className="font-semibold text-gray-100">Tier 2 — Vector embeddings.</span> Enabled by default via <code>STREAMPULSE_HYBRID_LLM=1</code>. Embeds the text (BAAI/bge-m3 by default) and compares it against the domain pack's prototype sentences by cosine similarity, committing only above <code>CLASSIFIER_EMBEDDING_THRESHOLD</code> (default 0.65 — calibrated to favor precision, deferring uncertain cases to Tier 3 rather than risk a confident wrong answer).</li>
             <li><span className="font-semibold text-gray-100">Tier 3 — LLM zero-shot escalation.</span> Also gated by <code>STREAMPULSE_HYBRID_LLM=1</code>. Asks the configured LLM (via <code>LLM_JUDGE</code>) to pick one of the domain pack's labels when the earlier tiers aren't confident.</li>
           </ol>
 
@@ -165,12 +165,11 @@ export default function UserGuidePage() {
             <Activity className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
             <p className="text-xs text-gray-300 leading-relaxed">
               <span className="font-semibold text-gray-100">Measured under load</span> (<code>eval/THROUGHPUT_BENCHMARK.md</code>):
-              a 1,000-request instantaneous burst (no ramp-up) against a single free-tier instance measured 22 req/s
-              peak throughput, 1,912ms average / 10,358ms P95 response time, and a 100% error rate under that
-              overload -- evidence the endpoint needs request queuing/backpressure or horizontal scaling before this
-              load shape is production-safe, not a number to read as sustained capacity. That same overload meant
-              signature verification wasn't meaningfully exercised in this particular run (nearly every request
-              failed the same way regardless of signature validity); see the source file for the full honest read.
+              a 1,000-request burst at concurrency 50 completed with a 0.00% error rate. With the full classification
+              cascade (embedding and LLM tiers on every payload) the single-process figures were 1.7 req/s and 29 s
+              average latency; on keyword-tier payloads with pooled connections and one worker per vCPU the same
+              host sustained 46.8 req/s at 4.0 s average. The numbers describe one host and one payload shape, not a
+              capacity guarantee; see the source file for the setup and limitations.
             </p>
           </div>
         </section>
