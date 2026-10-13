@@ -123,7 +123,7 @@ classification:
 - **Empirical comparison of classification tiers**: keyword, embedding, and LLM accuracy and
   latency measured independently on the same evaluation set.
 
-For the full literature context and honest assessment of novelty, see [RESEARCH.md](RESEARCH.md).
+For the full literature context and assessment of novelty, see [RESEARCH.md](RESEARCH.md).
 
 ## Benchmark Reproduction Suite
 

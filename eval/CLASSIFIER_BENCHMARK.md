@@ -6,7 +6,7 @@ Accuracy + macro-F1 of the hybrid domain classifier on a curated, balanced label
 `python eval/run_classifier_benchmark.py` (keyword) and
 `STREAMPULSE_HYBRID_LLM=1 python eval/run_classifier_benchmark.py` (LLM escalation).
 
-## Why this set is hard (and honest)
+## Why this set is hard
 The texts are **paraphrased to avoid the literal domain keywords** (e.g. "we brought in more
 money and kept more of it after bills" instead of "revenue/profit/ebitda"). This deliberately
 defeats naive keyword matching so the benchmark measures the **value of the LLM tier**, not a

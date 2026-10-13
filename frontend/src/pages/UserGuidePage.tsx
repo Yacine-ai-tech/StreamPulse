@@ -129,7 +129,7 @@ export default function UserGuidePage() {
             justification for paying for the LLM tier at all.
           </p>
           <p className="text-xs text-gray-400 leading-relaxed">
-            <span className="font-semibold">Honest caveat (from the benchmark doc itself):</span> real streams are a
+            <span className="font-semibold">Limitation (from the benchmark doc itself):</span> real streams are a
             mix of keyword-rich and keyword-poor text, so keyword-only would score well above 8.3% in production,
             and the LLM tier is opt-in and costs per call. The 48-example set is small and curated — treat 91.7% as
             "strongly separable on a small clean set," not a production guarantee. The embedding tier's threshold is
@@ -169,7 +169,7 @@ export default function UserGuidePage() {
               cascade (embedding and LLM tiers on every payload) the single-process figures were 1.7 req/s and 29 s
               average latency; on keyword-tier payloads with pooled connections and one worker per vCPU the same
               host sustained 46.8 req/s at 4.0 s average. The numbers describe one host and one payload shape, not a
-              capacity guarantee; see the source file for the setup and limitations. An earlier instantaneous 1,000-request burst against a single free-tier instance had measured 22 req/s peak, 1,912 ms average and 10,358 ms P95 response time with every request failing under that overload, which is why the numbers above were re-measured on the current host.
+              capacity guarantee; see the source file for the setup and limitations. An earlier instantaneous 1,000-request burst against a single instance had measured 22 req/s peak, 1,912 ms average and 10,358 ms P95 response time with every request failing under that overload, which is why the numbers above were re-measured on the current host.
             </p>
           </div>
         </section>

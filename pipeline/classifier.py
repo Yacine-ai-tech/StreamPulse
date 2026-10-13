@@ -878,7 +878,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     # Static override: no Anthropic/OpenAI key → use Gemini directly (no auth errors at all)
     if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
         primary_model = "gemini/gemini-2.5-flash"
-    # Dynamic override: LLM_JUDGE_FALLBACK set in VPS .env when primary key unavailable
+    # Dynamic override: LLM_JUDGE_FALLBACK set in the environment when the primary key is unavailable
     env_fallback = os.getenv("LLM_JUDGE_FALLBACK", "")
     gemini_failover = "gemini/gemini-2.5-flash"
     has_gemini_failover = os.getenv("GEMINI_API_KEY") and primary_model != gemini_failover
