@@ -302,6 +302,14 @@ def _embed(inputs: List[str], model: str) -> List[List[float]]:
 
 _import_lock = threading.Lock()
 
+# Imported once, here, on the thread that loads this module (the application's main
+# thread). litellm's own logging hooks import submodules from other threads, so a first
+# import from a worker thread can deadlock in the interpreter's import machinery.
+try:
+    from litellm import completion as _LITELLM_COMPLETION
+except Exception:  # pragma: no cover - litellm is optional for the keyword tier
+    _LITELLM_COMPLETION = None
+
 
 def _local_embedder(model: str):
     """Load (once) and return the local sentence-transformers model. Guarded by a lock so
@@ -320,6 +328,8 @@ def _local_embedder(model: str):
 def _get_completion():
     """litellm's `completion`, imported under a lock: a first import from several worker
     threads at once deadlocks inside the interpreter's import machinery."""
+    if _LITELLM_COMPLETION is not None:
+        return _LITELLM_COMPLETION
     with _import_lock:
         from litellm import completion
     return completion
