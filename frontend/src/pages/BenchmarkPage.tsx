@@ -184,7 +184,7 @@ export default function BenchmarkPage() {
               <div className="rounded-xl border border-line bg-surface-2 p-4">
                 <div className="font-semibold text-body mb-1">Overall Security Accuracy</div>
                 <div className="text-2xl font-bold text-accent my-1">100.0%</div>
-                <div className="text-dim">Zero false positives and zero false negatives under concurrent burst request injection.</div>
+                <div className="text-dim">All 90 valid and all 10 invalid signatures were handled correctly in a 100-request concurrent run.</div>
               </div>
 
               <div className="rounded-xl border border-line bg-surface-2 p-4">

@@ -39,7 +39,7 @@ export default function ResearchPage() {
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-accent mb-1">Three-Tier Cascade</div>
             <div className="font-semibold text-body text-sm mb-1">Cost & Latency Optimization</div>
-            <div className="text-xs text-dim">Keyword heuristics (&lt;0.5ms) → Local BGE-M3 vectors (~8ms) → Zero-shot LLM escalation.</div>
+            <div className="text-xs text-dim">Keyword heuristics → local BGE-M3 vectors → zero-shot LLM escalation.</div>
           </div>
           <div className="rounded-xl border border-line bg-surface-2 p-4">
             <div className="text-xs font-semibold uppercase tracking-wider text-ok mb-1">HMAC Security</div>
@@ -67,7 +67,7 @@ export default function ResearchPage() {
                 <span className="px-1.5 py-0.5 rounded bg-accent/20 text-accent font-mono text-[10px]">Tier 1</span>
                 Keyword Fast-Path
               </div>
-              <p>Evaluates curated domain vocabulary (e.g. "EBITDA" → Finance). If heuristic confidence exceeds 0.70, the event routes immediately with under 0.5 ms latency.</p>
+              <p>Evaluates curated domain vocabulary (e.g. "EBITDA" → Finance). If heuristic confidence reaches the keyword threshold (0.55 by default), the event routes immediately without any model call.</p>
             </div>
 
             <div className="rounded-lg bg-surface-2 p-4 border border-line text-xs space-y-2">
@@ -83,7 +83,7 @@ export default function ResearchPage() {
                 <span className="px-1.5 py-0.5 rounded bg-primary/20 text-primary font-mono text-[10px]">Tier 3</span>
                 LLM Semantic Escalation
               </div>
-              <p>If vector confidence remains below threshold, the record escalates to a reasoning LLM (the configured judge model, with Gemini Flash as failover), achieving 99.0% macro-F1 on ambiguous text in the benchmark described in BENCHMARK.md.</p>
+              <p>If vector confidence remains below threshold, the record escalates to a reasoning LLM (the configured judge model, with Gemini Flash as failover), reaching 99.0% accuracy on the synthetic 504-example set described in BENCHMARK.md (a separability measure, not production traffic).</p>
             </div>
           </div>
         </div>
@@ -111,9 +111,9 @@ export default function ResearchPage() {
               The streaming pipeline separates HTTP reception from downstream transformation:
             </p>
             <ul className="list-disc pl-4 space-y-1">
-              <li><strong className="text-body">Event Bus:</strong> Redis pub/sub decoupling ingest workers from persistent Postgres writes.</li>
+              <li><strong className="text-body">Event Bus:</strong> Optional Redis pub/sub (set REDIS_URL) that relays live events between worker processes to WebSocket and SSE clients.</li>
               <li><strong className="text-body">Batched Persistence:</strong> Multi-row transactional inserts avoiding per-event write bottlenecks.</li>
-              <li><strong className="text-body">Multi-Worker Scaling:</strong> Measured 46.8 req/s sustained throughput across multi-process Uvicorn workers.</li>
+              <li><strong className="text-body">Multi-Worker Scaling:</strong> 46.8 req/s measured on a six-vCPU host with one Uvicorn worker per vCPU, on keyword-tier payloads (see BENCHMARK.md section 2.1).</li>
             </ul>
           </div>
         </Card>
