@@ -258,6 +258,14 @@ async def startup_event():
     from concurrent.futures import ThreadPoolExecutor
     asyncio.get_running_loop().set_default_executor(ThreadPoolExecutor(max_workers=64))
 
+    # Load the classifier's heavy dependencies in the background so the first request
+    # after a start does not pay for them (and does not hit a proxy timeout).
+    try:
+        from pipeline.classifier import warm_up
+        threading.Thread(target=warm_up, daemon=True, name="classifier-warmup").start()
+    except Exception:
+        pass
+
 
 # Try to import upgraded classifier; gracefully degrade
 try:
