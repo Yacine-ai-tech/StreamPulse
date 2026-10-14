@@ -341,6 +341,10 @@ def warm_up() -> None:
         _get_completion()
         if getattr(settings, "INFERENCE_MODE", "local") != "remote":
             _local_embedder(settings.STREAMPULSE_EMBED_MODEL)
+        # Embed the domain prototypes now (it is computed lazily and reused afterwards), so
+        # the first real classification does not pay for it.
+        _get_proto_embeddings()
+        log.info("classifier warm-up complete")
     except Exception as exc:  # warm-up is best effort
         log.warning("classifier warm-up skipped: %s", exc)
 
