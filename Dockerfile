@@ -13,8 +13,8 @@ COPY . .
 
 EXPOSE 8004
 
-HEALTHCHECK --interval=30s --timeout=10s --start-period=10s --retries=3 \
-    CMD python3 -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",8004)}/health', timeout=5)" || exit 1
+HEALTHCHECK --interval=15s --timeout=10s --start-period=180s --retries=3 \
+    CMD python3 -c "import os,urllib.request; urllib.request.urlopen(f'http://localhost:{os.environ.get(\"PORT\",8004)}/ready', timeout=5)" || exit 1
 
 # Honor the platform-injected $PORT (PaaS platforms); default 8004 locally.
 # WEB_CONCURRENCY defaults to 1 (safe on low-memory hosts — each

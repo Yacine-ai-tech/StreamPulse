@@ -335,6 +335,9 @@ def _get_completion():
     return completion
 
 
+WARM = threading.Event()
+
+
 def warm_up() -> None:
     """Pre-load the heavy dependencies so the first real request does not pay for them."""
     try:
@@ -347,6 +350,8 @@ def warm_up() -> None:
         log.info("classifier warm-up complete")
     except Exception as exc:  # warm-up is best effort
         log.warning("classifier warm-up skipped: %s", exc)
+    finally:
+        WARM.set()
 
 # ════════════════════════════════════════════════════════════════════════════
 # CLASSIFICATION CACHE (Content Hash Caching)
