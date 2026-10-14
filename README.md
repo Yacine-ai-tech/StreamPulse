@@ -60,6 +60,11 @@ uvicorn api:app --port 8004
 
 ## Architecture
 
+A full component, lifecycle and design-decision write-up is in [`ARCHITECTURE.md`](ARCHITECTURE.md),
+with an interactive version in the dashboard. Every configuration variable is described in
+[`.env.example`](.env.example). `GET /ready` reports `warming_up` until the classifier's models
+and prototypes are loaded.
+
 ```
    ┌─────────────┐
    │ Webhook/CSV │

@@ -1,6 +1,7 @@
 import UserGuidePage from './pages/UserGuidePage';
 import BenchmarkPage from './pages/BenchmarkPage';
 import ResearchPage from './pages/ResearchPage';
+import ArchitecturePage from './pages/ArchitecturePage';
 import ApiDocs from './pages/ApiDocs';
 import { Component, ReactNode, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
@@ -80,6 +81,7 @@ const NAV = [
   { to: "/alerts", label: "Alerts", icon: BellRing },
   { to: "/automation", label: "Automation", icon: Workflow },
   { to: "/classifier", label: "Classifier", icon: Split },
+  { to: "/architecture", label: "Architecture", icon: Workflow },
   { to: "/research", label: "Research", icon: GraduationCap },
   { to: "/benchmark", label: "Benchmarks", icon: Award },
   { to: "/api-docs", label: "API Docs", icon: Code2 },
@@ -123,6 +125,7 @@ export default function App() {
                 <Route path="/alerts" element={<Alerts />} />
                 <Route path="/automation" element={<Automation />} />
                 <Route path="/classifier" element={<Classifier />} />
+                <Route path="/architecture" element={<ArchitecturePage />} />
                 <Route path="/research" element={<ResearchPage />} />
                 <Route path="/benchmark" element={<BenchmarkPage />} />
                 <Route path="/benchmarks" element={<Navigate to="/benchmark" replace />} />

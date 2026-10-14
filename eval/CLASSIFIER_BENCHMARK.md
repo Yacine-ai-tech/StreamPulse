@@ -1,5 +1,7 @@
 # StreamPulse — Domain Classifier Benchmark
 
+> Figures recorded: 2026-10. Document last reviewed: 2026-10-14.
+
 Accuracy + macro-F1 of the hybrid domain classifier on a curated, balanced labeled set
 (`eval/domain_labeled.jsonl`, 48 examples across the bundled reference domain pack — see
 `domain_packs/README.md`). Reproducible:

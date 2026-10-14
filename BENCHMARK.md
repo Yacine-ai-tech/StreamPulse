@@ -1,5 +1,7 @@
 # Benchmark Results
 
+> Figures recorded: 2026-10. Document last reviewed: 2026-10-14.
+
 This document summarizes StreamPulse's measured classifier accuracy, throughput, and webhook
 security. Full methodology and per-run detail are in the `eval/` directory.
 

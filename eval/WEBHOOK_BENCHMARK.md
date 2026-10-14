@@ -1,5 +1,7 @@
 # StreamPulse — Webhook Router Benchmark
 
+> Figures recorded: 2026-08. Document last reviewed: 2026-10-14.
+
 A benchmark of the webhook ingestion and security (HMAC signature) layers. Reproducible:
 `python eval/run_webhook_benchmark.py`
 

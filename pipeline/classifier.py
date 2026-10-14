@@ -927,10 +927,10 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
     primary_model = settings.LLM_JUDGE
     # Static override: no Anthropic/OpenAI key → use Gemini directly (no auth errors at all)
     if not os.getenv("ANTHROPIC_API_KEY") and not os.getenv("OPENAI_API_KEY") and os.getenv("GEMINI_API_KEY"):
-        primary_model = "gemini/gemini-2.5-flash"
+        primary_model = os.getenv("LLM_JUDGE_FAILOVER", "gemini/gemini-2.5-flash").strip() or "gemini/gemini-2.5-flash"
     # Dynamic override: LLM_JUDGE_FALLBACK set in the environment when the primary key is unavailable
     env_fallback = os.getenv("LLM_JUDGE_FALLBACK", "")
-    gemini_failover = "gemini/gemini-2.5-flash"
+    gemini_failover = os.getenv("LLM_JUDGE_FAILOVER", "gemini/gemini-2.5-flash").strip() or "gemini/gemini-2.5-flash"
     has_gemini_failover = os.getenv("GEMINI_API_KEY") and primary_model != gemini_failover
 
     _auth_signals = ("AuthenticationError", "PermissionDeniedError", "401", "403",
@@ -947,7 +947,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
                 {"role": "user", "content": f"<document>\n{content[:1200]}\n</document>"}
             ],
             temperature=0.0,
-            timeout=5.0,
+            timeout=float(os.getenv("CLASSIFIER_LLM_TIMEOUT_SECONDS", "5.0")),
         )
         return (resp.choices[0].message.content or "").strip()
 
