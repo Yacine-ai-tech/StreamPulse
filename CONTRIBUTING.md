@@ -118,3 +118,11 @@ Use [Conventional Commits](https://www.conventionalcommits.org/):
 ## 🔒 Security & Vulnerability Disclosure
 
 Email `contact@ysiddo-ai-projects.app` to report security vulnerabilities privately.
+
+## Other ways to help
+
+Code is not the only contribution. Trying StreamPulse on your own data and reporting what worked or did
+not, answering a question in [Discussions](https://github.com/Yacine-ai-tech/StreamPulse/discussions) or
+improving a paragraph of the documentation all help. If the project is useful to you, a star or a
+follow on [@Yacine-ai-tech](https://github.com/Yacine-ai-tech) is welcome, and optional; sharing
+the link with someone who has the same problem is just as good.
