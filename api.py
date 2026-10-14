@@ -140,6 +140,7 @@ class InternalTokenMiddleware:
     EXEMPT_EXACT = {
         "/",
         "/health",
+        "/ready",
         "/docs",
         "/openapi.json",
         "/api/redoc",
@@ -445,6 +446,18 @@ class IngestJsonRequest(BaseModel):
 
 _last_db_check = 0.0
 _cached_db_status = "ok"
+
+
+@app.get("/ready")
+async def ready() -> Dict[str, Any]:
+    """200 once the classifier's dependencies and domain prototypes are loaded."""
+    try:
+        from pipeline.classifier import WARM
+    except Exception:
+        return {"status": "ready", "service": "streampulse"}
+    if not WARM.is_set():
+        raise HTTPException(status_code=503, detail="warming_up")
+    return {"status": "ready", "service": "streampulse"}
 
 
 @app.get("/health")
