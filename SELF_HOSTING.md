@@ -7,7 +7,9 @@
 ## Environment Variables (`.env`)
 You should create a `.env` file based on `.env.example`. Make sure to set the following:
 
-- `POSTGRES_URL`: Connection string for PostgreSQL KPI store.
+Every variable is described in [`.env.example`](.env.example). The main ones:
+
+- `POSTGRES_URL`: Connection string for PostgreSQL KPI store (SQLite when empty).
 - `LLM_DEFAULT` & `LLM_JUDGE`: LiteLLM model identifiers in `provider/model` form.
 - Provider API keys for the models you reference (see `.env.example` for the variable names).
 - `WEBHOOK_SECRET`: Used to secure incoming webhook calls via HMAC.
@@ -15,5 +17,14 @@ You should create a `.env` file based on `.env.example`. Make sure to set the fo
 - `CORS_ALLOWED_ORIGINS`: Comma-separated list of allowed origins.
 - `TELEMETRY_OPT_OUT`: Set to `true` to disable the anonymous startup ping (see the README for exactly what it contains).
 - `N8N_BASE_URL` & `N8N_API_KEY`: n8n connection details (auto-provisioned).
-- `GOOGLE_CLIENT_ID` & `GOOGLE_CLIENT_SECRET`: For Gmail ingestion.
-- `CLICKUP_API_KEY` & `CLICKUP_WORKSPACE_ID`: For ClickUp integration.
+
+## Embeddings and readiness
+
+Tier 2 of the classifier needs an embedding backend. Set `INFERENCE_MODE=remote` with
+`EMBEDDING_ENDPOINT` and `EMBED_TOKEN` to share one embedding service between several
+applications, or `INFERENCE_MODE=local` to load `STREAMPULSE_EMBED_MODEL` in the process.
+
+On start the classifier loads its dependencies and embeds the domain prototypes in the
+background. `GET /ready` returns 503 `warming_up` until that completes and 200 afterwards; gate
+traffic on `/ready` (`/health` is a liveness probe). The keyword and LLM tiers answer requests
+while the embedding tier is still warming.

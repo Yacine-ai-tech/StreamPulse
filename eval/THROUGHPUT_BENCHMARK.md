@@ -1,5 +1,7 @@
 # StreamPulse — Throughput & Scaling Benchmark
 
+> Figures recorded: 2026-09. Document last reviewed: 2026-10-14.
+
 A stress test of StreamPulse's webhook ingestion pipeline under concurrent load. Reproducible:
 `python eval/run_throughput_benchmark.py --target <url> --n-requests 1000 --concurrency 50`
 

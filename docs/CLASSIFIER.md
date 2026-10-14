@@ -89,4 +89,10 @@ and caveats: [eval/CLASSIFIER_BENCHMARK.md](../eval/CLASSIFIER_BENCHMARK.md).
 | `STREAMPULSE_EMBED_MODEL` | `BAAI/bge-m3` | Embedding model for Tier 2 |
 | `STREAMPULSE_DOMAIN_PACK` | bundled demo pack | Path to a custom domain-pack JSON (see `domain_packs/README.md`) |
 | `CLASSIFIER_EMBEDDING_THRESHOLD` | `0.65` | Minimum Tier 2 similarity to commit rather than defer to Tier 3 |
-| `LLM_JUDGE` | settings.LLM_JUDGE | LLM for Tier 3 |
+| `LLM_JUDGE` | `groq/openai/gpt-oss-120b` | LLM for Tier 3 |
+| `LLM_JUDGE_FALLBACK` | unset | model tried when the primary call fails authentication |
+| `LLM_JUDGE_FAILOVER` | `gemini/gemini-2.5-flash` | model tried when the primary call is rate-limited (needs `GEMINI_API_KEY`) |
+| `CLASSIFIER_LLM_TIMEOUT_SECONDS` | `5` | per-call timeout for Tier 3 |
+| `CLASSIFIER_KEYWORD_THRESHOLD` | `0.55` | Minimum Tier 1 confidence to answer without Tier 2 |
+| `EMBEDDING_ENDPOINT`, `EMBED_TOKEN` | unset | remote embedding host and bearer token (`INFERENCE_MODE=remote`) |
+| `INFERENCE_WAKE_TIMEOUT`, `INFERENCE_RETRY_DELAY` | `420`, `15` | budget for polling a remote host that is still starting |
