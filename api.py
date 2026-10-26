@@ -21,7 +21,7 @@ from fastapi import FastAPI, File, Form, Header, HTTPException, Request, UploadF
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.middleware.gzip import GZipMiddleware
 from fastapi.responses import FileResponse, StreamingResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field, model_validator
 
 from core.config import settings
 from core.logger import get_logger
@@ -440,8 +440,17 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class IngestJsonRequest(BaseModel):
-    records: List[Dict[str, Any]]
+    records: List[Dict[str, Any]] = Field(default_factory=list)
+    tasks: Optional[List[Dict[str, Any]]] = None
     source: str = "manual_json"
+
+    @model_validator(mode="before")
+    @classmethod
+    def map_tasks_to_records(cls, data: Any) -> Any:
+        if isinstance(data, dict):
+            if not data.get("records") and data.get("tasks"):
+                data["records"] = data["tasks"]
+        return data
 
 
 _last_db_check = 0.0
