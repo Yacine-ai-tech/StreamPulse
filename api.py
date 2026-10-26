@@ -460,6 +460,12 @@ async def ready() -> Dict[str, Any]:
     return {"status": "ready", "service": "streampulse"}
 
 
+@app.get("/live")
+async def live() -> Dict[str, Any]:
+    """Pure process liveness probe for Docker/container orchestrators. Zero database calls."""
+    return {"status": "alive", "service": "streampulse"}
+
+
 @app.get("/health")
 async def health() -> Dict[str, Any]:
     global _last_db_check, _cached_db_status

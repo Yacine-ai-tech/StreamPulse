@@ -127,7 +127,7 @@ def _get_pool():
                 pool_url = _get_pooler_url(_PG_URL)
                 _pool = ConnectionPool(
                     pool_url,
-                    min_size=2,
+                    min_size=0,
                     max_size=int(os.environ.get("PG_POOL_MAX_SIZE", "50")),
                     timeout=10.0,
                     max_idle=300,
@@ -135,8 +135,9 @@ def _get_pool():
                     reconnect_failed=None,
                     check=ConnectionPool.check_connection,
                     kwargs={"row_factory": dict_row, "connect_timeout": 5},
+                    open=False,
                 )
-                log.info("✅ StreamPulse Neon connection pool initialized (min=2, pooler enabled)")
+                log.info("✅ StreamPulse Neon connection pool initialized (min=0, pooler enabled, scale-to-zero optimized)")
     return _pool
 
 
