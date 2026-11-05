@@ -140,6 +140,7 @@ class InternalTokenMiddleware:
     EXEMPT_EXACT = {
         "/",
         "/health",
+        "/live",
         "/ready",
         "/docs",
         "/openapi.json",
