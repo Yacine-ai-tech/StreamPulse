@@ -35,7 +35,7 @@ test.describe('Phase 5.2 — StreamPulse Dashboards', () => {
     await page.route('**/*', async route => {
       const req = route.request();
       const url = req.url();
-      if ((req.resourceType() === 'fetch' || req.resourceType() === 'xhr') && url.includes('vercel.app')) {
+      if ((req.resourceType() === 'fetch' || req.resourceType() === 'xhr') && url.includes('pages.dev')) {
         // Staging backends are supplied entirely by the environment; no host is
         // baked in here. Set the STAGING_*_URL vars (see frontend/.env.example)
         // to redirect UI traffic at a deployment. Unset -> request passes through

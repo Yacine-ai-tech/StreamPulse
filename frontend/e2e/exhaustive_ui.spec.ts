@@ -8,7 +8,7 @@ test.describe('Exhaustive UI Component & Page Flow Suite', () => {
     await page.route('**/*', async route => {
       const req = route.request();
       const url = req.url();
-      if ((req.resourceType() === 'fetch' || req.resourceType() === 'xhr') && url.includes('vercel.app')) {
+      if ((req.resourceType() === 'fetch' || req.resourceType() === 'xhr') && url.includes('pages.dev')) {
         let backendUrl = process.env.TEST_BACKEND_URL || 'http://localhost:8004';
         if (url.includes('docintel-ui')) backendUrl = process.env.TEST_DOCINTEL_URL || 'http://localhost:8001';
         else if (url.includes('agentkit-ui')) backendUrl = process.env.TEST_AGENTKIT_URL || 'http://localhost:8002';
