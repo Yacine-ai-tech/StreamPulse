@@ -2,7 +2,7 @@
 
 [![CI](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml/badge.svg)](https://github.com/Yacine-ai-tech/StreamPulse/actions/workflows/ci.yml)
 [![License: AGPL v3](https://img.shields.io/badge/License-AGPL_v3-blue.svg)](LICENSE)
-[![Live App](https://img.shields.io/badge/Live_App-streampulse-0070f3?style=flat)](https://streampulse.ysiddo-ai-projects.app)
+[![Live App](https://img.shields.io/badge/Live_App-streampulse-0070f3?style=flat)](https://streampulse.ysiddo-ai-projects.app?utm_source=github&utm_medium=referral)
 [![Research](https://img.shields.io/badge/Research-Cascade_Architecture-8a2be2?style=flat)](https://streampulse.ysiddo-ai-projects.app/research)
 [![Benchmarks](https://img.shields.io/badge/Benchmarks-Macro--F1_0.990-green?style=flat)](https://streampulse.ysiddo-ai-projects.app/benchmark)
 [![Guide](https://img.shields.io/badge/Docs-User_Guide-blue?style=flat)](https://streampulse.ysiddo-ai-projects.app/guide)
