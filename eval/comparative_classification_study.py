@@ -305,8 +305,8 @@ def verify_2026_stack() -> Dict[str, Any]:
     )
     
     # Verify LiteLLM usage
-    verification["stack_components"]["litellm_enabled"] = settings.STREAMPULSE_HYBRID_LLM == "1"
-    verification["compliance"]["litellm_integration"] = settings.STREAMPULSE_HYBRID_LLM == "1"
+    verification["stack_components"]["litellm_enabled"] = bool(settings.STREAMPULSE_HYBRID_LLM)
+    verification["compliance"]["litellm_integration"] = bool(settings.STREAMPULSE_HYBRID_LLM)
     
     # Overall compliance
     verification["overall_compliance"] = all(verification["compliance"].values())

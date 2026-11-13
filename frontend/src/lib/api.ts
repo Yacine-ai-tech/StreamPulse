@@ -58,6 +58,10 @@ export function demoSessionId(): string {
 }
 
 async function req<T>(path: string, init?: RequestInit, retryCount = 0): Promise<T> {
+  // Retries are only safe for idempotent GETs — retrying a POST (ingest, replay,
+  // webhook) after a 5xx or a network failure that may have already reached the
+  // server would create duplicate records.
+  const isGet = !init?.method || init.method.toUpperCase() === "GET";
   try {
     const headers = new Headers(init?.headers);
     headers.set("X-Demo-Session-Id", demoSessionId());
@@ -67,7 +71,7 @@ async function req<T>(path: string, init?: RequestInit, retryCount = 0): Promise
     }
     const res = await fetch(BASE + path, { ...init, headers });
     if (!res.ok) {
-      if (res.status >= 500 && retryCount < 5) {
+      if (isGet && res.status >= 500 && retryCount < 5) {
         await delay(2000 * (retryCount + 1));
         return req<T>(path, init, retryCount + 1);
       }
@@ -80,7 +84,7 @@ async function req<T>(path: string, init?: RequestInit, retryCount = 0): Promise
     }
     return res.json() as Promise<T>;
   } catch (err: any) {
-    if ((err instanceof TypeError || err.message === 'Failed to fetch') && retryCount < 5) {
+    if (isGet && (err instanceof TypeError || err.message === 'Failed to fetch') && retryCount < 5) {
       await delay(2000 * (retryCount + 1));
       return req<T>(path, init, retryCount + 1);
     }

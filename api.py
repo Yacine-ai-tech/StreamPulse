@@ -83,7 +83,8 @@ def _telemetry_instance_id() -> str:
 
 def _send_telemetry():
     """
-    One anonymous startup ping per ~6h to TELEMETRY_URL, so the project can count distinct
+    One anonymous startup ping, throttled to at most once per 30 seconds (see the
+    lock-file check below), to TELEMETRY_URL, so the project can count distinct
     installs. Sends only {service, event, version, instance_id} — no ingested records,
     filenames, IPs, or other request data. See README.md's Anonymous Telemetry section.
 
@@ -183,6 +184,7 @@ class InternalTokenMiddleware:
         "/api-docs",
         "/user-guide",
         "/benchmark",
+        "/logo_streampulse.png",
     }
     EXEMPT_PREFIX = ("/api/v1/auth/", "/assets/", "/static/")
 
@@ -199,7 +201,6 @@ class InternalTokenMiddleware:
             request.method == "OPTIONS"
             or path in self.EXEMPT_EXACT
             or path.startswith(self.EXEMPT_PREFIX)
-            or path.endswith((".js", ".css", ".woff2", ".woff", ".png", ".svg", ".ico", ".json", ".webmanifest"))
         ):
             return await self.app(scope, receive, send)
 
@@ -238,6 +239,37 @@ def _require_ingestion_scope(request: Request, session_id: Optional[str]) -> Non
         raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
     if not session_id and not _has_valid_internal_token(request):
         raise HTTPException(status_code=401, detail="internal_token_required_for_global_ingestion")
+
+
+def _is_admin_token(x_admin_token: Optional[str]) -> bool:
+    admin_secret = os.getenv("ADMIN_TOKEN")
+    return bool(x_admin_token and admin_secret
+                and hmac.compare_digest(x_admin_token, admin_secret))
+
+
+def _resolve_session_scope(
+    session_id: Optional[str],
+    x_demo_session_id: Optional[str],
+    x_admin_token: Optional[str],
+) -> str:
+    """Shared guard for read endpoints that expose stored data: visitors must present
+    their demo session id; '*' (all sessions) and missing sessions require ADMIN_TOKEN.
+    Returns the session id to scope queries with ('*' for admins)."""
+    is_admin = _is_admin_token(x_admin_token)
+    effective_session = session_id or x_demo_session_id
+    if not is_admin and not effective_session:
+        raise HTTPException(status_code=401, detail="visitor_session_required")
+    if not is_admin and effective_session == "*":
+        raise HTTPException(status_code=403, detail="admin_required_for_unscoped_access")
+    return "*" if is_admin else effective_session
+
+
+def _require_internal_or_admin(request: Request, x_admin_token: Optional[str] = None) -> None:
+    """Gate for expensive/internal diagnostics: a valid internal service token or
+    the admin token is required."""
+    if _has_valid_internal_token(request) or _is_admin_token(x_admin_token):
+        return
+    raise HTTPException(status_code=403, detail="internal_token_required")
 
 
 try:
@@ -321,6 +353,7 @@ _MESSAGE_BROKER = os.getenv("MESSAGE_BROKER", "redis").lower()
 _REDIS_URL = os.getenv("REDIS_URL")
 _KAFKA_BROKER_URL = os.getenv("KAFKA_BROKER_URL")
 
+_redis_client = None  # shared client for pub/sub AND publishing (created once at startup)
 _redis_pubsub = None
 _kafka_producer = None
 _kafka_consumer = None
@@ -336,14 +369,16 @@ async def _setup_broker():
 
 
 async def _setup_redis():
-    global _redis_pubsub
+    global _redis_client, _redis_pubsub
     if not _REDIS_URL:
         log.warning("MESSAGE_BROKER=redis but REDIS_URL is not set")
         return
     try:
         import redis.asyncio as aioredis
-        r = aioredis.from_url(_REDIS_URL)
-        _redis_pubsub = r.pubsub()
+        # One shared client for the process lifetime — _broadcast reuses it for
+        # publishes instead of opening (and never closing) a new connection per ingest.
+        _redis_client = aioredis.from_url(_REDIS_URL)
+        _redis_pubsub = _redis_client.pubsub()
         await _redis_pubsub.subscribe("streampulse_ingest")
         log.info("✅ Redis PubSub broker enabled for multi-node broadcast")
 
@@ -410,9 +445,17 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
 
     if _MESSAGE_BROKER == "redis" and _REDIS_URL:
         try:
-            import redis.asyncio as aioredis
-            r = aioredis.from_url(_REDIS_URL)
-            await r.publish("streampulse_ingest", msg_str)
+            if _redis_client is not None:
+                await _redis_client.publish("streampulse_ingest", msg_str)
+            else:
+                # Broker setup never ran (or failed) — publish ephemerally, but
+                # close it this time so connections don't leak per ingest.
+                import redis.asyncio as aioredis
+                r = aioredis.from_url(_REDIS_URL)
+                try:
+                    await r.publish("streampulse_ingest", msg_str)
+                finally:
+                    await r.aclose()
         except Exception as e:
             log.warning(f"Redis publish failed: {e}")
 
@@ -426,6 +469,26 @@ async def _broadcast(payload: Dict[str, Any]) -> None:
 @app.on_event("startup")
 async def startup_broker():
     await _setup_broker()
+
+
+@app.on_event("shutdown")
+async def shutdown_broker():
+    """Close broker connections so they don't leak across worker restarts."""
+    global _redis_client, _redis_pubsub, _kafka_producer, _kafka_consumer
+    try:
+        if _redis_pubsub is not None:
+            await _redis_pubsub.close()
+        if _redis_client is not None:
+            await _redis_client.aclose()
+    except Exception as e:
+        log.warning(f"Redis shutdown failed: {e}")
+    try:
+        if _kafka_consumer is not None:
+            await _kafka_consumer.stop()
+        if _kafka_producer is not None:
+            await _kafka_producer.stop()
+    except Exception as e:
+        log.warning(f"Kafka shutdown failed: {e}")
 
 
 async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
@@ -453,7 +516,9 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
         async with httpx.AsyncClient(timeout=10) as client:
             resp = await client.post(settings.EXTERNAL_WEBHOOK_URL, json=payload, headers=headers)
             if resp.status_code >= 400:
-                log.error(f"External Webhook Failed: {resp.status_code} - {resp.text}")
+                # Truncate — a third-party error page can be large and may echo
+                # request data back into the logs.
+                log.error(f"External Webhook Failed: {resp.status_code} - {resp.text[:500]}")
             else:
                 log.info(f"Successfully pushed {len(records)} records to {settings.EXTERNAL_WEBHOOK_URL}")
     except Exception as e:
@@ -463,8 +528,10 @@ async def _dispatch_external_webhook(records: List[Dict[str, Any]]) -> None:
 # ─────────────────────────────────────────────────────────────────────────────
 
 class IngestJsonRequest(BaseModel):
-    records: List[Dict[str, Any]] = Field(default_factory=list)
-    tasks: Optional[List[Dict[str, Any]]] = None
+    # max_length caps a single request's record count — without it an authenticated
+    # or signed caller could submit an unbounded list and exhaust memory/DB writes.
+    records: List[Dict[str, Any]] = Field(default_factory=list, max_length=10000)
+    tasks: Optional[List[Dict[str, Any]]] = Field(default=None, max_length=10000)
     source: str = "manual_json"
 
     @model_validator(mode="before")
@@ -478,6 +545,13 @@ class IngestJsonRequest(BaseModel):
 
 _last_db_check = 0.0
 _cached_db_status = "ok"
+
+# Limit concurrent classification tasks GLOBALLY (module-level, shared across all
+# requests — a per-request semaphore would let N concurrent requests each spawn 8
+# in-flight classifications). Each slow Tier 2/3 classification can block for
+# 5–30 s; without a cap, a 100-row CSV spawns 100 simultaneous asyncio.to_thread
+# calls that saturate the thread pool and starve each other.
+_classify_sem = asyncio.Semaphore(8)
 
 
 @app.get("/ready")
@@ -510,7 +584,9 @@ async def health() -> Dict[str, Any]:
                 conn.execute("SELECT 1")
             _cached_db_status = "ok"
         except Exception as e:
-            _cached_db_status = f"error: {str(e)}"
+            # Don't leak raw DB/driver exception text to unauthenticated probe callers.
+            log.warning("health db check failed: %s", e)
+            _cached_db_status = "error"
         _last_db_check = now
     return {"status": "ok" if _cached_db_status == "ok" else "degraded", "service": "streampulse", "version": "0.1.0", "database": _cached_db_status}
 
@@ -525,11 +601,6 @@ async def _ingest_records(
         log_data_ingestion, req.source, "started",
         records=len(req.records), payload=req.records[:20], owner_session_id=x_demo_session_id,
     )
-
-    # Limit concurrent classification tasks: each slow Tier 2/3 classification
-    # can block for 5–30 s; without a cap, a 100-row CSV spawns 100 simultaneous
-    # asyncio.to_thread calls that saturate the thread pool and starve each other.
-    _classify_sem = asyncio.Semaphore(8)
 
     # Prefer common metric-name columns so the stored record has a meaningful label.
     _METRIC_COLS = ("metric", "metric_name", "name", "kpi", "kpi_name", "header", "label", "key")
@@ -617,7 +688,15 @@ async def ingest_csv(
     import csv
     import io
     content = await file.read()
-    rows = list(csv.DictReader(io.StringIO(content.decode("utf-8"))))
+    # Bound the upload before decoding/parsing — an unbounded read lets a caller
+    # stream an arbitrarily large body into memory.
+    if len(content) > 25 * 1024 * 1024:
+        raise HTTPException(status_code=413, detail="csv_too_large")
+    try:
+        text = content.decode("utf-8")
+    except UnicodeDecodeError:
+        raise HTTPException(status_code=400, detail="csv_must_be_utf8")
+    rows = list(csv.DictReader(io.StringIO(text)))
     return await _ingest_records(IngestJsonRequest(records=rows, source=source), x_demo_session_id)
 
 
@@ -646,9 +725,61 @@ async def webhook_generic(
         payload = json.loads(body or b"{}")
     except json.JSONDecodeError:
         raise HTTPException(status_code=400, detail="invalid_json")
-    records = WebhookReceiver.parse_payload(payload, source_name)
+    try:
+        records = WebhookReceiver.parse_payload(payload, source_name)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=str(e))
     # A valid HMAC authorizes this integration to write globally visible records.
     return await _ingest_records(IngestJsonRequest(records=list(records), source=source_name), x_demo_session_id=None)
+
+
+_VISION_IMAGE_MAX_BYTES = 10 * 1024 * 1024  # 10 MB cap on fetched images
+
+
+def _assert_public_https_url(url: str) -> None:
+    """SSRF guard for attacker-supplied image_url values: https only, and the
+    resolved host must not be a private/loopback/link-local/reserved address.
+    Raises ValueError on rejection (callers treat it like any fetch failure)."""
+    import ipaddress
+    import socket
+    from urllib.parse import urlparse
+
+    parsed = urlparse(url)
+    if parsed.scheme != "https" or not parsed.hostname:
+        raise ValueError("image_url must be an https URL")
+    try:
+        port = parsed.port or 443
+    except ValueError:
+        raise ValueError("image_url has an invalid port")
+    try:
+        infos = socket.getaddrinfo(parsed.hostname, port, proto=socket.IPPROTO_TCP)
+    except socket.gaierror as e:
+        raise ValueError("image_url host does not resolve") from e
+    for info in infos:
+        try:
+            ip = ipaddress.ip_address(info[4][0])
+        except ValueError:
+            continue
+        if (ip.is_private or ip.is_loopback or ip.is_link_local
+                or ip.is_multicast or ip.is_reserved or ip.is_unspecified):
+            raise ValueError("image_url resolves to a non-public address")
+
+
+async def _fetch_image_capped(client: httpx.AsyncClient, url: str) -> bytes:
+    """GET an https image with no redirect following and a hard size cap, so a
+    malicious/compromised image_url can't bounce us to an internal service or
+    stream an unbounded body into memory."""
+    _assert_public_https_url(url)
+    size = 0
+    chunks = []
+    async with client.stream("GET", url, follow_redirects=False, timeout=30) as resp:
+        resp.raise_for_status()
+        async for chunk in resp.aiter_bytes():
+            size += len(chunk)
+            if size > _VISION_IMAGE_MAX_BYTES:
+                raise ValueError("image_url response exceeds size cap")
+            chunks.append(chunk)
+    return b"".join(chunks)
 
 
 @app.post("/webhook/{source_name}/with-vision")
@@ -681,7 +812,7 @@ async def webhook_with_vision(
                 img_url = raw.get("image_url") if isinstance(raw, dict) else None
                 if img_url:
                     try:
-                        img_bytes = (await client.get(img_url)).content
+                        img_bytes = await _fetch_image_capped(client, img_url)
                         files = {"file": ("img.jpg", img_bytes, "image/jpeg")}
                         data = {"categories": ",".join(["tractor", "lathe", "crane", "forklift", "excavator", "other"])}
                         # Send DocIntel's own token if this deployment sets one — DocIntel's
@@ -710,8 +841,7 @@ async def pipeline_status(
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
 ) -> Dict[str, Any]:
-    admin_secret = os.getenv("ADMIN_TOKEN")
-    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    is_admin = _is_admin_token(x_admin_token)
     effective_session = session_id or x_demo_session_id
     if not is_admin and not effective_session:
         raise HTTPException(status_code=401, detail="visitor_session_required")
@@ -753,8 +883,7 @@ async def pipeline_replay(
     """Re-ingest the stored payload of a past ingestion event (real replay). Ownership is
     enforced in get_ingestion_row: a log_id from a different visitor's session 404s instead
     of replaying their stored payload."""
-    admin_secret = os.getenv("ADMIN_TOKEN")
-    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    is_admin = _is_admin_token(x_admin_token)
     effective_session = session_id or x_demo_session_id
     if not is_admin and not effective_session:
         raise HTTPException(status_code=401, detail="visitor_session_required")
@@ -783,8 +912,7 @@ async def pipeline_history(
     x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
     x_streampulse_token: Optional[str] = Header(default=None, alias="X-StreamPulse-Internal-Token"),
 ) -> Dict[str, Any]:
-    admin_secret = os.getenv("ADMIN_TOKEN")
-    is_admin = bool(x_admin_token and admin_secret and x_admin_token == admin_secret)
+    is_admin = _is_admin_token(x_admin_token)
     effective_session = session_id or x_demo_session_id
     if not is_admin and not effective_session:
         raise HTTPException(status_code=401, detail="visitor_session_required")
@@ -839,11 +967,16 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
     session_id = request.headers.get("X-Demo-Session-Id") or session_id
 
     async def gen():
+        # SSE is one-way push only; real ingest events go over WebSocket / Redis
+        # broadcast, which this endpoint does not subscribe to. Yield heartbeat
+        # frames in the shape the frontend's SSE parser expects
+        # (data.event === "ingest" && Array.isArray(data.records) — anything else
+        # is ignored) instead of polling the DB every 5s with a synchronous call
+        # inside the async generator (which also blocked the event loop).
         while True:
             if await request.is_disconnected():
                 break
-            recent = get_pipeline_history(limit=5, session_id=session_id)
-            yield f"data: {json.dumps(recent)}\n\n"
+            yield f"data: {json.dumps({'event': 'heartbeat', 'records': []})}\n\n"
             await asyncio.sleep(5)
     return StreamingResponse(gen(), media_type="text/event-stream")
 
@@ -851,8 +984,13 @@ async def live_sse(request: Request, session_id: Optional[str] = None) -> Stream
 # ── Analytics & Storage Endpoints ───────────────────────
 
 @app.get("/analytics/cache-stats")
-async def get_cache_stats() -> Dict[str, Any]:
-    """Get classification cache performance statistics."""
+async def get_cache_stats(
+    request: Request,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+) -> Dict[str, Any]:
+    """Get classification cache performance statistics. Internal diagnostics —
+    requires an internal service token or the admin token."""
+    _require_internal_or_admin(request, x_admin_token)
     try:
         from pipeline.classifier import get_cache_stats
         return get_cache_stats()
@@ -861,8 +999,13 @@ async def get_cache_stats() -> Dict[str, Any]:
         return {"error": str(e), "cache_hits": 0, "cache_misses": 0, "hit_rate": 0.0}
 
 @app.get("/analytics/storage-stats")
-async def get_storage_stats() -> Dict[str, Any]:
-    """Get storage backend statistics (pgvector, DuckDB)."""
+async def get_storage_stats(
+    request: Request,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+) -> Dict[str, Any]:
+    """Get storage backend statistics (pgvector, DuckDB). Internal diagnostics —
+    requires an internal service token or the admin token."""
+    _require_internal_or_admin(request, x_admin_token)
     stats = {}
     
     if _storage_available:
@@ -925,21 +1068,25 @@ def _store_summary(days: int, session_id: Optional[str]) -> Dict[str, Any]:
 @app.get("/analytics/domain-summary")
 async def get_domain_summary(
     days: int = 7,
+    session_id: Optional[str] = None,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
 ) -> Dict[str, Any]:
     """Get domain-level summary using DuckDB analytics. Scoped the same way
-    /pipeline/history etc. are -- see x_demo_session_id's docstring there."""
+    /pipeline/history etc. are — see _resolve_session_scope."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
 
+    scoped_session = _resolve_session_scope(session_id, x_demo_session_id, x_admin_token)
+
     if not settings.ENABLE_DUCKDB:
-        data = (await asyncio.to_thread(_store_summary, days, x_demo_session_id))["domains"]
+        data = (await asyncio.to_thread(_store_summary, days, scoped_session))["domains"]
         return {"data": data, "count": len(data), "period_days": days, "engine": "primary_store"}
 
     try:
         from storage import get_analytics_engine
         analytics = get_analytics_engine()
-        df = analytics.get_domain_summary(days=days, session_id=x_demo_session_id)
+        df = analytics.get_domain_summary(days=days, session_id=scoped_session)
         return {
             "data": df.to_dict(orient="records"),
             "count": len(df),
@@ -952,20 +1099,24 @@ async def get_domain_summary(
 @app.get("/analytics/classification-trends")
 async def get_classification_trends(
     days: int = 30,
+    session_id: Optional[str] = None,
     x_demo_session_id: Optional[str] = Header(default=None, alias="X-Demo-Session-Id"),
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
 ) -> Dict[str, Any]:
     """Get classification method trends over time. See get_domain_summary for scoping."""
     if not _storage_available:
         return {"error": "Storage backend not available"}
 
+    scoped_session = _resolve_session_scope(session_id, x_demo_session_id, x_admin_token)
+
     if not settings.ENABLE_DUCKDB:
-        data = (await asyncio.to_thread(_store_summary, days, x_demo_session_id))["trends"]
+        data = (await asyncio.to_thread(_store_summary, days, scoped_session))["trends"]
         return {"data": data, "count": len(data), "period_days": days, "engine": "primary_store"}
 
     try:
         from storage import get_analytics_engine
         analytics = get_analytics_engine()
-        df = analytics.get_classification_trends(days=days, session_id=x_demo_session_id)
+        df = analytics.get_classification_trends(days=days, session_id=scoped_session)
         return {
             "data": df.to_dict(orient="records"),
             "count": len(df),
@@ -993,8 +1144,13 @@ def _do_analytics_refresh() -> Dict[str, Any]:
 
 
 @app.post("/analytics/refresh")
-async def refresh_analytics() -> Dict[str, Any]:
-    """Refresh analytics data and materialized views."""
+async def refresh_analytics(
+    request: Request,
+    x_admin_token: Optional[str] = Header(default=None, alias="X-Admin-Token"),
+) -> Dict[str, Any]:
+    """Refresh analytics data and materialized views. This is an expensive
+    full re-import — restricted to internal service callers or admins."""
+    _require_internal_or_admin(request, x_admin_token)
     if not _storage_available:
         return {"error": "Storage backend not available"}
 
