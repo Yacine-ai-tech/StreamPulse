@@ -1,9 +1,3 @@
-import UserGuidePage from './pages/UserGuidePage';
-import BenchmarkPage from './pages/BenchmarkPage';
-import ResearchPage from './pages/ResearchPage';
-import ArchitecturePage from './pages/ArchitecturePage';
-import ApiDocs from './pages/ApiDocs';
-import LicensePage from './pages/LicensePage.tsx';
 import { Component, ReactNode, lazy, Suspense, useCallback, useEffect, useRef, useState } from "react";
 import { BrowserRouter, Route, Routes, Navigate, useLocation } from "react-router-dom";
 import { Radio, ListTree, Send, Workflow, Split, Cable, Database, BellRing, BarChart3, Code2, BookOpen, GraduationCap, Award } from "lucide-react";
@@ -11,16 +5,22 @@ import { AppShell } from "./kit/AppShell";
 import { WakingBackend } from "./kit/misc";
 import { Skeleton } from "./kit/primitives";
 import { api } from "./lib/api";
-import Events from "./pages/Events";
-import Playground from "./pages/Playground";
-import Automation from "./pages/Automation";
-import Classifier from "./pages/Classifier";
-import Sources from "./pages/Sources";
-import Destinations from "./pages/Destinations";
-import Alerts from "./pages/Alerts";
-import Analytics from "./pages/Analytics";
 
 const Live = lazy(() => import("./pages/Live"));
+const Events = lazy(() => import("./pages/Events"));
+const Playground = lazy(() => import("./pages/Playground"));
+const Automation = lazy(() => import("./pages/Automation"));
+const Classifier = lazy(() => import("./pages/Classifier"));
+const Sources = lazy(() => import("./pages/Sources"));
+const Destinations = lazy(() => import("./pages/Destinations"));
+const Alerts = lazy(() => import("./pages/Alerts"));
+const Analytics = lazy(() => import("./pages/Analytics"));
+const ArchitecturePage = lazy(() => import("./pages/ArchitecturePage"));
+const ResearchPage = lazy(() => import("./pages/ResearchPage"));
+const BenchmarkPage = lazy(() => import("./pages/BenchmarkPage"));
+const UserGuidePage = lazy(() => import("./pages/UserGuidePage"));
+const ApiDocs = lazy(() => import("./pages/ApiDocs"));
+const LicensePage = lazy(() => import("./pages/LicensePage"));
 
 interface ErrorBoundaryState {
   hasError: boolean;
@@ -131,8 +131,8 @@ export default function App() {
                 <Route path="/benchmark" element={<BenchmarkPage />} />
                 <Route path="/benchmarks" element={<Navigate to="/benchmark" replace />} />
                 <Route path="/api-docs" element={<ApiDocs />} />
-                              <Route path="/license" element={<LicensePage />} />
-<Route path="/user-guide" element={<UserGuidePage />} />
+                <Route path="/license" element={<LicensePage />} />
+                <Route path="/user-guide" element={<UserGuidePage />} />
                 <Route path="/guide" element={<Navigate to="/user-guide" replace />} />
                 <Route path="*" element={<Live />} />
               </Routes>
