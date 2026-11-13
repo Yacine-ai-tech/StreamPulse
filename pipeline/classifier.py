@@ -762,31 +762,32 @@ class RealtimePipeline:
             if not isinstance(record.metric_value, (int, float)):
                 return
 
-            # Log ingestion
-            ingestion_id = log_data_ingestion(
-                username=record.user_id or "system",
-                filename=f"{record.domain}_{record.metric_name}",
-                file_type="streaming",
+            # Log ingestion — store.py signatures: log_data_ingestion(source, status,
+            # records, error, payload, owner_session_id). These are synchronous DB
+            # calls, so run them off the event loop.
+            ingestion_id = await asyncio.to_thread(
+                log_data_ingestion,
                 source=record.source,
-                row_count=1,
+                status="started",
+                records=1,
+                payload={"metric": record.metric_name, "domain": record.domain,
+                         "user_id": record.user_id},
             )
 
-            # Store KPI metric
-            kpi_df = pd.DataFrame([{
-                "metric": record.metric_name,
+            # Store KPI metric — store_kpi_metrics takes a list of record dicts,
+            # not a DataFrame.
+            await asyncio.to_thread(store_kpi_metrics, [{
+                "source": record.source,
+                "period": str(record.timestamp),
                 "category": record.domain,
+                "metric": record.metric_name,
                 "value": record.metric_value,
-                "period": record.timestamp,
                 "confidence": record.confidence,
             }])
-            store_kpi_metrics(kpi_df)
 
-            # Update ingestion log
-            update_ingestion_log(
-                ingestion_id=ingestion_id,
-                status="completed",
-                row_count=1,
-                ingested_at=datetime.utcnow(),
+            # Update ingestion log — update_ingestion_log(log_id, status, records, error)
+            await asyncio.to_thread(
+                update_ingestion_log, ingestion_id, "completed", records=1,
             )
 
             self.processed_count += 1
@@ -873,7 +874,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         return result
 
     # Tier 2: Vector embedding similarity
-    if settings.STREAMPULSE_HYBRID_LLM == "1":
+    if settings.STREAMPULSE_HYBRID_LLM:
         content_hash = _content_hash(content or "")
 
         # Persistent pgvector cache (separate from the in-memory _classification_cache
@@ -908,7 +909,7 @@ def classify(content: str, fast_only: bool = False) -> Dict[str, Any]:
         except Exception as e:
             log.warning("Embedding classification failed: %s", e)
 
-    if settings.STREAMPULSE_HYBRID_LLM != "1":
+    if not settings.STREAMPULSE_HYBRID_LLM:
         result = {"domain": domain, "confidence": round(float(conf), 3), "method": "keyword_low_conf"}
         _cache_classification(content, result)
         return result

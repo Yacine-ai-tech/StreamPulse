@@ -46,6 +46,15 @@ class WebhookReceiver:
         else:
             items = [raw_json]
 
+        if not isinstance(items, list):
+            raise ValueError("webhook payload 'records' must be a list")
+
+        def _safe_float(v: Any, default: float) -> float:
+            try:
+                return float(v)
+            except (TypeError, ValueError):
+                return default
+
         records: List[DataRecord] = []
         for r in items:
             if isinstance(r, dict):
@@ -60,9 +69,9 @@ class WebhookReceiver:
                     "period":     r.get("period", ""),
                     "category":   r.get("category", source_name),
                     "metric":     r.get("metric") or raw_text[:100],
-                    "value":      float(r.get("value") or 0),
+                    "value":      _safe_float(r.get("value") or 0, 0.0),
                     "unit":       r.get("unit"),
-                    "confidence": float(r.get("confidence", 0.9)),
+                    "confidence": _safe_float(r.get("confidence", 0.9), 0.9),
                     "raw":        r,
                 }))
             else:

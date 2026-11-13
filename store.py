@@ -15,6 +15,7 @@ from __future__ import annotations
 import json
 import os
 import sqlite3
+import sys
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -135,7 +136,12 @@ def _get_pool():
                     reconnect_failed=None,
                     check=ConnectionPool.check_connection,
                     kwargs={"row_factory": dict_row, "connect_timeout": 5},
-                    open=False,
+                    # open=True: with min_size=0 the pool is "ready" immediately and
+                    # connections are still created lazily per checkout — open=False
+                    # left the pool permanently closed, so every pool.connection()
+                    # raised PoolClosed and PG was silently unused (all traffic fell
+                    # back to SQLite — split-brain).
+                    open=True,
                 )
                 log.info("✅ StreamPulse Neon connection pool initialized (min=0, pooler enabled, scale-to-zero optimized)")
     return _pool
@@ -144,13 +150,20 @@ def _get_pool():
 @contextmanager
 def _conn():
     if _PG:
+        # Only connection ACQUISITION may fall back to SQLite. The previous version
+        # wrapped the `yield` in the same try/except, so any exception raised by the
+        # caller inside `with _conn() as c:` was caught here and the generator
+        # re-entered the SQLite branch — raising RuntimeError("generator didn't stop
+        # after throw()") that masked the real error (split-brain: the failed PG call
+        # was then retried against SQLite, writing to a different database).
+        cm = None
         try:
-            pool = _get_pool()
-            with pool.connection(timeout=3.0) as conn:
-                yield conn
-            return
+            cm = _get_pool().connection(timeout=3.0)
+            conn = cm.__enter__()
         except Exception as e:
-            log.warning("Postgres connection failed (%s) — falling back to SQLite", e)
+            # Loud, deliberate fallback — PG is unreachable, serve this call from
+            # SQLite rather than failing the request, but never silently.
+            log.error("Postgres connection failed (%s) — falling back to SQLite for this call", e)
             c = sqlite3.connect(_DB_PATH)
             c.row_factory = sqlite3.Row
             c.executescript(_SCHEMA_SQLITE)
@@ -159,6 +172,14 @@ def _conn():
                     yield c
             finally:
                 c.close()
+            return
+        try:
+            yield conn
+        except BaseException:
+            cm.__exit__(*sys.exc_info())
+            raise
+        else:
+            cm.__exit__(None, None, None)
     else:
         c = sqlite3.connect(_DB_PATH)
         c.row_factory = sqlite3.Row
